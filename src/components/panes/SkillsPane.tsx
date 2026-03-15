@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Trash2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import PaneHeader from './PaneHeader';
 import type { BasePaneProps } from './types';
+import SkillCard from '@/components/skills/SkillCard';
+import SkillMarkdown from '@/components/skills/SkillMarkdown';
 
 interface SkillMeta {
   name: string;
@@ -27,12 +27,13 @@ export default function SkillsPane({
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const detailScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetchSkills();
+    void fetchSkills();
 
     const handleSkillUpdated = () => {
-      fetchSkills();
+      void fetchSkills();
     };
     window.addEventListener('skills:updated', handleSkillUpdated);
     window.addEventListener('guides:updated', handleSkillUpdated);
@@ -42,6 +43,12 @@ export default function SkillsPane({
       window.removeEventListener('guides:updated', handleSkillUpdated);
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedSkill && detailScrollRef.current) {
+      detailScrollRef.current.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [selectedSkill?.name]);
 
   const fetchSkills = async () => {
     try {
@@ -69,7 +76,7 @@ export default function SkillsPane({
     }
   };
 
-  const handleDeleteSkill = async (name: string, e: React.MouseEvent) => {
+  const handleDeleteSkill = async (name: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!confirm(`Delete skill "${name}"?`)) return;
 
@@ -78,7 +85,7 @@ export default function SkillsPane({
       const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        fetchSkills();
+        await fetchSkills();
         if (selectedSkill?.name === name) {
           setSelectedSkill(null);
         }
@@ -104,6 +111,7 @@ export default function SkillsPane({
         {selectedSkill ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
+              type="button"
               onClick={() => setSelectedSkill(null)}
               style={{
                 background: 'none',
@@ -115,12 +123,6 @@ export default function SkillsPane({
                 padding: '4px',
                 borderRadius: '4px',
               }}
-              onMouseEnter={e => {
-                e.currentTarget.style.color = '#ccc';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = '#888';
-              }}
             >
               <ArrowLeft size={16} />
             </button>
@@ -131,12 +133,17 @@ export default function SkillsPane({
         )}
       </PaneHeader>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '12px' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '12px' }} ref={detailScrollRef}>
         {loading ? (
           <div style={{ color: '#555', fontSize: '13px', textAlign: 'center', paddingTop: '24px' }}>Loading...</div>
         ) : selectedSkill ? (
-          <div className="skill-content" style={{ color: '#ccc', fontSize: '13px', lineHeight: '1.6' }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedSkill.content}</ReactMarkdown>
+          <div>
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ color: '#eee', fontSize: '16px', fontWeight: 600 }}>{selectedSkill.name}</div>
+              <div style={{ color: '#888', fontSize: '13px', lineHeight: 1.4, marginTop: '6px' }}>{selectedSkill.description}</div>
+            </div>
+            <div style={{ borderTop: '1px solid #222', margin: '12px 0' }} />
+            <SkillMarkdown content={selectedSkill.content} />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -146,69 +153,13 @@ export default function SkillsPane({
               </div>
             ) : (
               skills.map((skill) => (
-                <button
+                <SkillCard
                   key={skill.name}
-                  onClick={() => handleSelectSkill(skill.name)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '12px',
-                    background: '#161616',
-                    border: '1px solid #222',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = '#1a1a1a';
-                    e.currentTarget.style.borderColor = '#333';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = '#161616';
-                    e.currentTarget.style.borderColor = '#222';
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ color: '#ddd', fontSize: '13px', fontWeight: 500 }}>{skill.name}</span>
-                    <span
-                      style={{
-                        color: '#777',
-                        fontSize: '12px',
-                        lineHeight: '1.4',
-                        display: 'block',
-                        marginTop: '2px',
-                      }}
-                    >
-                      {skill.description}
-                    </span>
-                  </div>
-                  <button
-                    onClick={e => handleDeleteSkill(skill.name, e)}
-                    disabled={deleting === skill.name}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#555',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      borderRadius: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexShrink: 0,
-                      opacity: deleting === skill.name ? 0.3 : 1,
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.color = '#ef4444';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.color = '#555';
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </button>
+                  skill={skill}
+                  onSelect={handleSelectSkill}
+                  onDelete={handleDeleteSkill}
+                  deleting={deleting}
+                />
               ))
             )}
           </div>
