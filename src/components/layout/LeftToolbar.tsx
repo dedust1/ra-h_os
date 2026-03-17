@@ -120,40 +120,44 @@ export default function LeftToolbar({
         background: 'transparent',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
         padding: '12px 8px',
         flexShrink: 0,
         transition: 'width 0.2s ease',
         overflow: 'hidden',
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <NavButton
-          icon={isExpanded ? PanelLeftClose : PanelLeftOpen}
-          label={isExpanded ? 'Collapse' : 'Expand'}
-          expanded={isExpanded}
-          onClick={onToggleExpanded}
-        />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <NavButton icon={Search} label="Search" expanded={isExpanded} onClick={onSearchClick} />
-          <NavButton icon={Plus} label="Add Stuff" expanded={isExpanded} onClick={onAddStuffClick} />
-          <NavButton icon={RefreshCw} label="Refresh" expanded={isExpanded} onClick={onRefreshClick} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', height: '100%' }}>
+        {/* Top: collapse + actions */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <NavButton
+            icon={isExpanded ? PanelLeftClose : PanelLeftOpen}
+            label={isExpanded ? 'Collapse' : 'Expand'}
+            expanded={isExpanded}
+            onClick={onToggleExpanded}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <NavButton icon={Search} label="Search" expanded={isExpanded} onClick={onSearchClick} />
+            <NavButton icon={Plus} label="Add Stuff" expanded={isExpanded} onClick={onAddStuffClick} />
+            <NavButton icon={RefreshCw} label="Refresh" expanded={isExpanded} onClick={onRefreshClick} />
+          </div>
         </div>
 
-        <div style={{ borderTop: '1px solid var(--rah-border)', paddingTop: '14px', marginTop: '10px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px' }}>
-            {VIEW_ITEMS.map((item) => (
-              <NavButton
-                key={`${item.paneType}-${item.label}`}
-                icon={item.icon}
-                label={item.label}
-                expanded={isExpanded}
-                active={activeTabType === item.paneType || openTabTypes.has(item.paneType)}
-                onClick={() => onPaneTypeClick(item.paneType)}
-                activeTone="green"
-              />
-            ))}
+        {/* Middle: view items, vertically centered */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 0 }}>
+          <div style={{ borderTop: '1px solid var(--rah-border)', paddingTop: '14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {VIEW_ITEMS.map((item) => (
+                <NavButton
+                  key={`${item.paneType}-${item.label}`}
+                  icon={item.icon}
+                  label={item.label}
+                  expanded={isExpanded}
+                  active={activeTabType === item.paneType || openTabTypes.has(item.paneType)}
+                  onClick={() => onPaneTypeClick(item.paneType)}
+                  activeTone="green"
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
