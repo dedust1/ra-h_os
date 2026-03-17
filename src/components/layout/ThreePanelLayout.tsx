@@ -6,6 +6,7 @@ import SearchModal from '../nodes/SearchModal';
 import { Node } from '@/types/database';
 import { DatabaseEvent } from '@/services/events';
 import { usePersistentState } from '@/hooks/usePersistentState';
+import { useTheme } from '@/hooks/useTheme';
 // ChatMessage import removed - chat disabled in rah-light
 
 // Stub type for delegation (delegation system removed in rah-light)
@@ -40,6 +41,8 @@ import QuickAddInput from '../agents/QuickAddInput';
 import type { PaneType, SlotState, PaneAction } from '../panes/types';
 
 export default function ThreePanelLayout() {
+  const [theme, toggleTheme] = useTheme();
+
   // Container ref for resize calculations
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1014,7 +1017,7 @@ export default function ThreePanelLayout() {
         display: 'flex',
         height: '100vh',
         width: '100vw',
-        background: '#0a0a0a',
+        background: 'var(--rah-bg-base)',
         overflow: 'hidden'
       }}
     >
@@ -1032,6 +1035,8 @@ export default function ThreePanelLayout() {
         openTabTypes={new Set([slotA?.type, slotB?.type].filter((t): t is PaneType => t != null))}
         activeTabType={activePane === 'A' ? slotA?.type ?? null : slotB?.type ?? null}
         onRefreshClick={handleRefreshAll}
+        theme={theme}
+        onThemeToggle={toggleTheme}
       />
 
       {/* Main content area */}

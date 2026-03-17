@@ -13,8 +13,11 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import type { PaneType } from '../panes/types';
+import type { Theme } from '@/hooks/useTheme';
 
 interface LeftToolbarProps {
   onSearchClick: () => void;
@@ -26,6 +29,8 @@ interface LeftToolbarProps {
   onToggleExpanded: () => void;
   openTabTypes: Set<PaneType>;
   activeTabType: PaneType | null;
+  theme: Theme;
+  onThemeToggle: () => void;
 }
 
 const NAV_WIDTH_COLLAPSED = 50;
@@ -57,7 +62,7 @@ function NavButton({
   activeTone?: 'neutral' | 'green';
 }) {
   const [hovered, setHovered] = useState(false);
-  const activeColor = activeTone === 'green' ? '#22c55e' : '#f0f0f0';
+  const activeColor = activeTone === 'green' ? 'var(--rah-accent-green)' : 'var(--rah-text-active)';
 
   return (
     <button
@@ -70,8 +75,8 @@ function NavButton({
         height: '36px',
         borderRadius: '8px',
         border: 'none',
-        background: active ? '#151515' : (hovered ? '#121212' : 'transparent'),
-        color: active ? activeColor : (hovered ? '#c7c7c7' : '#7a7a7a'),
+        background: active ? 'var(--rah-bg-hover)' : (hovered ? 'var(--rah-bg-subtle)' : 'transparent'),
+        color: active ? activeColor : (hovered ? 'var(--rah-text-secondary)' : 'var(--rah-text-muted)'),
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -104,6 +109,8 @@ export default function LeftToolbar({
   onToggleExpanded,
   openTabTypes,
   activeTabType,
+  theme,
+  onThemeToggle,
 }: LeftToolbarProps) {
   return (
     <div
@@ -134,7 +141,7 @@ export default function LeftToolbar({
           <NavButton icon={RefreshCw} label="Refresh" expanded={isExpanded} onClick={onRefreshClick} />
         </div>
 
-        <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '14px', marginTop: '10px' }}>
+        <div style={{ borderTop: '1px solid var(--rah-border)', paddingTop: '14px', marginTop: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px' }}>
             {VIEW_ITEMS.map((item) => (
               <NavButton
@@ -151,7 +158,13 @@ export default function LeftToolbar({
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '8px' }}>
+      <div style={{ borderTop: '1px solid var(--rah-border)', paddingTop: '8px' }}>
+        <NavButton
+          icon={theme === 'dark' ? Sun : Moon}
+          label={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          expanded={isExpanded}
+          onClick={onThemeToggle}
+        />
         <NavButton icon={Settings} label="Settings" expanded={isExpanded} onClick={onSettingsClick} />
       </div>
     </div>
