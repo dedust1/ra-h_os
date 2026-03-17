@@ -90,7 +90,7 @@ export default function LogsViewer() {
 
   if (loading) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+      <div style={{ padding: '40px', textAlign: 'center', color: 'var(var(--rah-text-muted))' }}>
         Loading logs...
       </div>
     );
@@ -106,7 +106,7 @@ export default function LogsViewer() {
 
   if (logs.length === 0) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+      <div style={{ padding: '40px', textAlign: 'center', color: 'var(var(--rah-text-muted))' }}>
         No logs found
       </div>
     );

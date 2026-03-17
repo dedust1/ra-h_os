@@ -94,7 +94,7 @@ export default function EdgeExplanationModal({
         .edge-modal-backdrop {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.85);
+          background: var(--rah-backdrop);
           backdrop-filter: blur(8px);
           display: flex;
           justify-content: center;
@@ -110,8 +110,8 @@ export default function EdgeExplanationModal({
         }
 
         .edge-modal-card {
-          background: #141414;
-          border: 1px solid #262626;
+          background: var(--rah-bg-panel);
+          border: 1px solid var(--rah-border-strong);
           border-radius: 16px;
           padding: 24px;
           box-shadow:
@@ -144,14 +144,14 @@ export default function EdgeExplanationModal({
         }
 
         .edge-modal-input-wrapper {
-          border: 1px solid #262626;
+          border: 1px solid var(--rah-border-strong);
           border-radius: 12px;
-          background: #0a0a0a;
+          background: var(--rah-bg-base);
           transition: border-color 0.15s ease;
         }
 
         .edge-modal-input-wrapper:focus-within {
-          border-color: #333;
+          border-color: var(--rah-border-stronger);
         }
 
         .edge-modal-textarea {
@@ -188,12 +188,12 @@ export default function EdgeExplanationModal({
           align-items: center;
           justify-content: center;
           padding: 2px 6px;
-          background: #262626;
+          background: var(--rah-border-strong);
           border-radius: 4px;
           font-size: 10px;
           font-family: inherit;
           color: #737373;
-          border: 1px solid #333;
+          border: 1px solid var(--rah-border-stronger);
         }
 
         .edge-modal-actions {
@@ -213,17 +213,17 @@ export default function EdgeExplanationModal({
 
         .edge-modal-btn--cancel {
           background: transparent;
-          border: 1px solid #262626;
+          border: 1px solid var(--rah-border-strong);
           color: #737373;
         }
 
         .edge-modal-btn--cancel:hover {
-          border-color: #333;
-          color: #a3a3a3;
+          border-color: var(--rah-border-stronger);
+          color: var(--rah-text-soft);
         }
 
         .edge-modal-btn--submit {
-          background: #262626;
+          background: var(--rah-border-strong);
           border: 1px solid transparent;
           color: #525252;
           cursor: default;

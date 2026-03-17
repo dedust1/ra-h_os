@@ -100,7 +100,7 @@ export default function SourceReader({
       flex: 1,
       display: 'flex',
       flexDirection: 'column',
-      background: '#0f0f0f',
+      background: 'var(--rah-bg-surface)',
       borderRadius: '4px',
       overflow: 'hidden',
     }}>
@@ -111,11 +111,11 @@ export default function SourceReader({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '8px 16px',
-          borderBottom: '1px solid #1a1a1a',
+          borderBottom: '1px solid var(--rah-border)',
         }}>
           <span style={{
             fontSize: '10px',
-            color: '#555',
+            color: 'var(--rah-text-muted)',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
           }}>
@@ -125,12 +125,12 @@ export default function SourceReader({
             onClick={() => setShowSearch(!showSearch)}
             title="Search content (⌘F)"
             style={{
-              background: showSearch ? '#262626' : 'transparent',
+              background: showSearch ? 'var(--rah-border-strong)' : 'transparent',
               border: 'none',
               borderRadius: '4px',
               padding: '4px 8px',
               cursor: 'pointer',
-              color: showSearch ? '#fafafa' : '#555',
+              color: showSearch ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',

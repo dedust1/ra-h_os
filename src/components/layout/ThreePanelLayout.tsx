@@ -1050,12 +1050,12 @@ export default function ThreePanelLayout() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#666',
+              color: 'var(--rah-text-muted)',
               gap: '12px',
             }}
           >
             <div style={{ fontSize: '14px' }}>No panes open</div>
-            <div style={{ fontSize: '12px', color: '#555' }}>
+            <div style={{ fontSize: '12px', color: 'var(--rah-text-muted)' }}>
               Select a view from the toolbar to get started
             </div>
           </div>
@@ -1081,7 +1081,7 @@ export default function ThreePanelLayout() {
                 margin: '0 auto',
                 width: '100%',
               } : {}),
-              background: '#111111',
+              background: 'var(--rah-bg-surface)',
               borderRadius: '10px',
               outline: dragOverSlot === 'A' ? '2px dashed #22c55e' : 'none',
               outlineOffset: '-4px',
@@ -1114,7 +1114,7 @@ export default function ThreePanelLayout() {
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              background: '#111111',
+              background: 'var(--rah-bg-surface)',
               borderRadius: '10px',
               outline: dragOverSlot === 'B' ? '2px dashed #22c55e' : 'none',
               outlineOffset: '-4px',

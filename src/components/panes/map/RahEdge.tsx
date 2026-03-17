@@ -56,12 +56,12 @@ function RahEdgeComponent({
         >
           <div
             style={{
-              background: '#1a1a1a',
-              border: '1px solid #333',
+              background: 'var(--rah-bg-active)',
+              border: '1px solid var(--rah-border-stronger)',
               borderRadius: 4,
               padding: '2px 8px',
               fontSize: 10,
-              color: '#ccc',
+              color: 'var(--rah-text-secondary)',
               textAlign: 'center',
               whiteSpace: 'nowrap',
               overflow: 'hidden',

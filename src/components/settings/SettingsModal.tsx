@@ -68,8 +68,8 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
         style={{
           width: '80vw',
           height: '85vh',
-          background: '#0f0f0f',
-          border: '1px solid #2a2a2a',
+          background: 'var(--rah-bg-surface)',
+          border: '1px solid var(--rah-border-strong)',
           borderRadius: '8px',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
           display: 'flex',
@@ -81,8 +81,8 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
         <div
           style={{
             width: '20%',
-            background: '#0a0a0a',
-            borderRight: '1px solid #2a2a2a',
+            background: 'var(--rah-bg-base)',
+            borderRight: '1px solid var(--rah-border-strong)',
             display: 'flex',
             flexDirection: 'column',
             padding: '24px 0'
@@ -94,7 +94,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               marginBottom: '24px',
               fontSize: '18px',
               fontWeight: '600',
-              color: '#fff'
+              color: 'var(--rah-text-active)'
             }}
           >
             Settings
@@ -105,8 +105,8 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: activeTab === 'logs' ? '#fff' : '#888',
-                background: activeTab === 'logs' ? '#1a3a2a' : 'transparent',
+                color: activeTab === 'logs' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
+                background: activeTab === 'logs' ? '#1a3a2a' : 'transparent', // semantic active state kept
                 borderLeft: activeTab === 'logs' ? '3px solid #22c55e' : '3px solid transparent',
                 cursor: 'pointer',
                 transition: 'all 0.2s'
@@ -119,7 +119,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: activeTab === 'tools' ? '#fff' : '#888',
+                color: activeTab === 'tools' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
                 background: activeTab === 'tools' ? '#1a3a2a' : 'transparent',
                 borderLeft: activeTab === 'tools' ? '3px solid #22c55e' : '3px solid transparent',
                 cursor: 'pointer',
@@ -133,7 +133,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: activeTab === 'guides' ? '#fff' : '#888',
+                color: activeTab === 'guides' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
                 background: activeTab === 'guides' ? '#1a3a2a' : 'transparent',
                 borderLeft: activeTab === 'guides' ? '3px solid #22c55e' : '3px solid transparent',
                 cursor: 'pointer',
@@ -147,7 +147,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: activeTab === 'apikeys' ? '#fff' : '#888',
+                color: activeTab === 'apikeys' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
                 background: activeTab === 'apikeys' ? '#1a3a2a' : 'transparent',
                 borderLeft: activeTab === 'apikeys' ? '3px solid #22c55e' : '3px solid transparent',
                 cursor: 'pointer',
@@ -161,7 +161,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: activeTab === 'database' ? '#fff' : '#888',
+                color: activeTab === 'database' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
                 background: activeTab === 'database' ? '#1a3a2a' : 'transparent',
                 borderLeft: activeTab === 'database' ? '3px solid #22c55e' : '3px solid transparent',
                 cursor: 'pointer',
@@ -175,7 +175,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: activeTab === 'context' ? '#fff' : '#888',
+                color: activeTab === 'context' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
                 background: activeTab === 'context' ? '#1a3a2a' : 'transparent',
                 borderLeft: activeTab === 'context' ? '3px solid #22c55e' : '3px solid transparent',
                 cursor: 'pointer',
@@ -189,7 +189,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: activeTab === 'agents' ? '#fff' : '#888',
+                color: activeTab === 'agents' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
                 background: activeTab === 'agents' ? '#1a3a2a' : 'transparent',
                 borderLeft: activeTab === 'agents' ? '3px solid #22c55e' : '3px solid transparent',
                 cursor: 'pointer',
@@ -202,7 +202,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: '#888',
+                color: 'var(--rah-text-muted)',
                 opacity: 0.4,
                 cursor: 'not-allowed'
               }}
@@ -213,7 +213,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 padding: '12px 24px',
                 fontSize: '14px',
-                color: '#888',
+                color: 'var(--rah-text-muted)',
                 opacity: 0.4,
                 cursor: 'not-allowed'
               }}
@@ -226,7 +226,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
             style={{
               marginTop: 'auto',
               padding: '24px',
-              borderTop: '1px solid #1f2937',
+              borderTop: '1px solid var(--rah-border)',
               display: 'flex',
               flexDirection: 'column',
               gap: '12px'
@@ -268,7 +268,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
           <div
             style={{
               padding: '16px 24px',
-              borderBottom: '1px solid #2a2a2a',
+              borderBottom: '1px solid var(--rah-border-strong)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
@@ -279,7 +279,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
                 margin: 0,
                 fontSize: '16px',
                 fontWeight: '600',
-                color: '#fff'
+                color: 'var(--rah-text-active)'
               }}
             >
               {activeTab === 'logs' && 'System Logs'}
@@ -295,7 +295,7 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: '#888',
+                color: 'var(--rah-text-muted)',
                 cursor: 'pointer',
                 fontSize: '24px',
                 lineHeight: 1,
@@ -303,10 +303,10 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
                 transition: 'color 0.2s'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#fff';
+                e.currentTarget.style.color = 'var(--rah-text-active)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#888';
+                e.currentTarget.style.color = 'var(--rah-text-muted)';
               }}
               title="Close (ESC)"
             >

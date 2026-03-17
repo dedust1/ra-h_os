@@ -91,7 +91,7 @@ export default function PaneHeader({
           />
         ) : null}
         {!tabBar && !children && !toolbarHostRef ? (
-          <div style={{ color: '#666', fontSize: '12px' }} />
+          <div style={{ color: 'var(--rah-text-muted)', fontSize: '12px' }} />
         ) : null}
       </div>
 
@@ -102,9 +102,9 @@ export default function PaneHeader({
             width: '32px',
             height: '32px',
             borderRadius: '8px',
-            border: '1px solid #3a3a3a',
-            background: '#161616',
-            color: '#c2c2c2',
+            border: '1px solid var(--rah-border-stronger)',
+            background: 'var(--rah-bg-elevated)',
+            color: 'var(--rah-text-secondary)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -119,9 +119,9 @@ export default function PaneHeader({
             e.currentTarget.style.color = '#fca5a5';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#161616';
-            e.currentTarget.style.borderColor = '#3a3a3a';
-            e.currentTarget.style.color = '#c2c2c2';
+            e.currentTarget.style.background = 'var(--rah-bg-elevated)';
+            e.currentTarget.style.borderColor = 'var(--rah-border-stronger)';
+            e.currentTarget.style.color = 'var(--rah-text-secondary)';
           }}
         >
           <X size={15} strokeWidth={2.25} />

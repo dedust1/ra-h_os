@@ -230,7 +230,7 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
         .search-backdrop {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.85);
+          background: var(--rah-backdrop);
           backdrop-filter: blur(8px);
           display: flex;
           justify-content: center;
@@ -250,8 +250,8 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
           display: flex;
           align-items: center;
           gap: 16px;
-          background: #141414;
-          border: 1px solid #262626;
+          background: var(--rah-bg-panel);
+          border: 1px solid var(--rah-border-strong);
           border-radius: 16px;
           padding: 20px 24px;
           box-shadow: 
@@ -292,18 +292,18 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
           align-items: center;
           justify-content: center;
           padding: 4px 8px;
-          background: #262626;
+          background: var(--rah-border-strong);
           border-radius: 6px;
           font-size: 11px;
           font-family: inherit;
           color: #737373;
-          border: 1px solid #333;
+          border: 1px solid var(--rah-border-stronger);
         }
         
         .search-results {
           margin-top: 8px;
-          background: #141414;
-          border: 1px solid #262626;
+          background: var(--rah-bg-panel);
+          border: 1px solid var(--rah-border-strong);
           border-radius: 16px;
           overflow: hidden;
           box-shadow: 
@@ -320,7 +320,7 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
           padding: 16px 20px;
           background: transparent;
           border: none;
-          border-bottom: 1px solid #1f1f1f;
+          border-bottom: 1px solid var(--rah-bg-active);
           cursor: pointer;
           transition: background 100ms ease;
           text-align: left;
@@ -333,7 +333,7 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
         
         .search-result-item:hover,
         .search-result-item.selected {
-          background: #1a1a1a;
+          background: var(--rah-bg-active);
         }
         
         .result-id {
@@ -343,7 +343,7 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
           font-size: 10px;
           font-weight: 600;
           font-family: 'SF Mono', 'Fira Code', monospace;
-          color: #0a0a0a;
+          color: var(--rah-bg-base);
           background: #22c55e;
           padding: 4px 8px;
           border-radius: 6px;
@@ -359,7 +359,7 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
 
         .result-title {
           flex: 1;
-          color: #e5e5e5;
+          color: var(--rah-text-base);
           font-size: 15px;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -374,8 +374,8 @@ export default function SearchModal({ isOpen, onClose, onNodeSelect, existingFil
         .search-empty {
           margin-top: 8px;
           padding: 32px 24px;
-          background: #141414;
-          border: 1px solid #262626;
+          background: var(--rah-bg-panel);
+          border: 1px solid var(--rah-border-strong);
           border-radius: 16px;
           color: #525252;
           font-size: 14px;

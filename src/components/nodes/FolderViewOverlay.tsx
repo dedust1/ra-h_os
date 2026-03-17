@@ -581,7 +581,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
   const renderDimensionGrid = () => {
     if (dimensionsLoading) {
       return (
-        <div style={{ padding: '40px', color: '#888', textAlign: 'center' }}>
+        <div style={{ padding: '40px', color: 'var(var(--rah-text-muted))', textAlign: 'center' }}>
           Loading dimensions...
         </div>
       );
@@ -597,7 +597,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
 
     if (sortedDimensions.length === 0) {
       return (
-        <div style={{ padding: '40px', color: '#888', textAlign: 'center' }}>
+        <div style={{ padding: '40px', color: 'var(var(--rah-text-muted))', textAlign: 'center' }}>
           No dimensions yet. Create one to get started.
         </div>
       );
@@ -693,7 +693,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 {dimension.description && (
                   <div style={{
                     fontSize: '11px',
-                    color: '#555',
+                    color: 'var(var(--rah-text-muted))',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -736,7 +736,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    color: '#666',
+                    color: 'var(var(--rah-text-muted))',
                     transition: 'color 0.1s ease'
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = '#999'; }}
@@ -784,7 +784,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: deletingDimension === dimension.dimension ? 'not-allowed' : 'pointer',
-                    color: '#666',
+                    color: 'var(var(--rah-text-muted))',
                     opacity: deletingDimension === dimension.dimension ? 0.3 : 1,
                     transition: 'color 0.1s ease'
                   }}
@@ -930,7 +930,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
             onClose();
           }}
           style={{
-            background: '#0a0a0a',
+            background: 'var(var(--rah-bg-base))',
             border: '1px solid #161616',
             borderRadius: '12px',
             padding: '14px',
@@ -1053,10 +1053,10 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
         </div>
       ))}
       {nodesLoading && (
-        <div style={{ padding: '20px', color: '#888' }}>Loading...</div>
+        <div style={{ padding: '20px', color: 'var(var(--rah-text-muted))' }}>Loading...</div>
       )}
       {!nodesLoading && nodes.length === 0 && (
-        <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#888', paddingTop: '40px' }}>
+        <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(var(--rah-text-muted))', paddingTop: '40px' }}>
           No nodes in this dimension yet.
         </div>
       )}
@@ -1085,7 +1085,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
             gap: '12px',
             padding: '12px 16px',
             marginBottom: '4px',
-            background: '#0a0a0a',
+            background: 'var(var(--rah-bg-base))',
             border: '1px solid #161616',
             borderRadius: '10px',
             cursor: 'pointer',
@@ -1107,7 +1107,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: '#1a1a1a',
+            background: 'var(var(--rah-bg-active))',
             borderRadius: '8px',
             flexShrink: 0
           }}>
@@ -1176,7 +1176,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     <span style={{
                       padding: '2px 6px',
                       fontSize: '10px',
-                      color: '#666'
+                      color: 'var(var(--rah-text-muted))'
                     }}>
                       +{node.dimensions.length - 3}
                     </span>
@@ -1206,10 +1206,10 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
         </button>
       ))}
       {nodesLoading && (
-        <div style={{ padding: '20px', color: '#888' }}>Loading...</div>
+        <div style={{ padding: '20px', color: 'var(var(--rah-text-muted))' }}>Loading...</div>
       )}
       {!nodesLoading && nodes.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#888', paddingTop: '40px' }}>
+        <div style={{ textAlign: 'center', color: 'var(var(--rah-text-muted))', paddingTop: '40px' }}>
           No nodes in this dimension yet.
         </div>
       )}
@@ -1224,8 +1224,8 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
         alignItems: 'center',
         gap: '8px',
         padding: '8px 24px',
-        borderBottom: '1px solid #1a1a1a',
-        background: '#0a0a0a',
+        borderBottom: '1px solid var(--rah-border)',
+        background: 'var(var(--rah-bg-base))',
         flexShrink: 0
       }}>
         <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
@@ -1233,7 +1233,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
         </span>
 
         {kanbanColumns.length === 0 && (
-          <span style={{ fontSize: '11px', color: '#555', fontStyle: 'italic' }}>
+          <span style={{ fontSize: '11px', color: 'var(var(--rah-text-muted))', fontStyle: 'italic' }}>
             Add dimensions to create columns
           </span>
         )}
@@ -1246,11 +1246,11 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               alignItems: 'center',
               gap: '4px',
               padding: '4px 8px',
-              background: '#1a1a1a',
+              background: 'var(var(--rah-bg-active))',
               border: '1px solid #333',
               borderRadius: '6px',
               fontSize: '11px',
-              color: '#888',
+              color: 'var(var(--rah-text-muted))',
               cursor: 'pointer'
             }}
           >
@@ -1266,7 +1266,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               marginTop: '4px',
               width: '200px',
               maxHeight: '300px',
-              background: '#1a1a1a',
+              background: 'var(var(--rah-bg-active))',
               border: '1px solid #333',
               borderRadius: '8px',
               overflow: 'hidden',
@@ -1281,10 +1281,10 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 style={{
                   width: '100%',
                   padding: '8px 12px',
-                  background: '#0a0a0a',
+                  background: 'var(var(--rah-bg-base))',
                   border: 'none',
                   borderBottom: '1px solid #333',
-                  color: '#fff',
+                  color: 'var(var(--rah-text-active))',
                   fontSize: '12px',
                   outline: 'none'
                 }}
@@ -1295,7 +1295,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   <div style={{
                     padding: '12px',
                     fontSize: '12px',
-                    color: '#666',
+                    color: 'var(var(--rah-text-muted))',
                     textAlign: 'center'
                   }}>
                     No dimensions available
@@ -1310,7 +1310,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                         padding: '8px 12px',
                         background: 'transparent',
                         border: 'none',
-                        color: '#ccc',
+                        color: 'var(var(--rah-text-secondary))',
                         fontSize: '12px',
                         textAlign: 'left',
                         cursor: 'pointer'
@@ -1357,7 +1357,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 display: 'flex',
                 flexDirection: 'column',
                 background: isDropTarget ? '#0f2417' : '#0a0a0a',
-                border: '1px solid #1a1a1a',
+                border: '1px solid var(--rah-border)',
                 borderRadius: '12px',
                 transition: 'all 0.2s'
               }}
@@ -1371,7 +1371,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px',
-                borderBottom: '1px solid #1a1a1a'
+                borderBottom: '1px solid var(--rah-border)'
               }}>
                 <div style={{
                   display: 'flex',
@@ -1389,8 +1389,8 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   </span>
                   <span style={{
                     fontSize: '11px',
-                    color: '#666',
-                    background: '#1a1a1a',
+                    color: 'var(var(--rah-text-muted))',
+                    background: 'var(var(--rah-bg-active))',
                     padding: '2px 6px',
                     borderRadius: '10px'
                   }}>
@@ -1404,7 +1404,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     border: 'none',
                     padding: '4px',
                     cursor: 'pointer',
-                    color: '#666',
+                    color: 'var(var(--rah-text-muted))',
                     display: 'flex',
                     alignItems: 'center'
                   }}
@@ -1433,7 +1433,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       padding: '10px',
                       marginBottom: '6px',
                       background: draggedNodeId === node.id ? '#1a1a1a' : '#111',
-                      border: '1px solid #222',
+                      border: '1px solid var(--rah-border-strong)',
                       borderRadius: '8px',
                       cursor: 'pointer',
                       opacity: draggedNodeId === node.id ? 0.5 : 1,
@@ -1478,10 +1478,10 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                               key={dim}
                               style={{
                                 padding: '2px 6px',
-                                background: '#1a1a1a',
+                                background: 'var(var(--rah-bg-active))',
                                 borderRadius: '4px',
                                 fontSize: '10px',
-                                color: '#666'
+                                color: 'var(var(--rah-text-muted))'
                               }}
                             >
                               {dim}
@@ -1514,7 +1514,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#666',
+            color: 'var(var(--rah-text-muted))',
             fontSize: '13px'
           }}>
             Add dimension columns to organize your nodes
@@ -1548,8 +1548,8 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               style={{
                 padding: '10px 18px',
                 borderRadius: '999px',
-                border: '1px solid #1f1f1f',
-                background: '#111',
+                border: '1px solid var(--rah-bg-active)',
+                background: 'var(var(--rah-bg-surface))',
                 color: '#f1f5f9',
                 cursor: nodesLoading ? 'not-allowed' : 'pointer'
               }}
@@ -1578,7 +1578,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
             style={{
               padding: '6px',
               borderRadius: '6px',
-              border: '1px solid #1f1f1f',
+              border: '1px solid var(--rah-bg-active)',
               background: 'transparent',
               cursor: 'pointer',
               color: '#cbd5f5'
@@ -1611,9 +1611,9 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               justifyContent: 'center',
               width: '28px',
               height: '28px',
-              color: '#555',
+              color: 'var(var(--rah-text-muted))',
               background: 'transparent',
-              border: '1px solid #1f1f1f',
+              border: '1px solid var(--rah-bg-active)',
               borderRadius: '6px',
               cursor: 'pointer',
               transition: 'all 0.15s'
@@ -1636,10 +1636,10 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               width: '28px',
               height: '28px',
               borderRadius: '6px',
-              border: '1px solid #1f1f1f',
+              border: '1px solid var(--rah-bg-active)',
               background: 'transparent',
               cursor: 'pointer',
-              color: '#555',
+              color: 'var(var(--rah-text-muted))',
               transition: 'all 0.15s'
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = '#888'; e.currentTarget.style.background = '#1a1a1a'; }}
@@ -1668,7 +1668,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
       }}
     >
       {toolbarHost ? createPortal(toolbar, toolbarHost) : (
-        <div style={{ borderBottom: '1px solid #1a1a1a', padding: '12px 16px' }}>
+        <div style={{ borderBottom: '1px solid var(--rah-border)', padding: '12px 16px' }}>
           {toolbar}
         </div>
       )}
@@ -1716,7 +1716,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
       >
         <div
           style={{
-            background: '#0a0a0a',
+            background: 'var(var(--rah-bg-base))',
             border: '1px solid #333',
             borderRadius: '12px',
             width: '480px',
@@ -1730,7 +1730,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
           {/* Header */}
           <div style={{
             padding: '16px 20px',
-            borderBottom: '1px solid #1a1a1a',
+            borderBottom: '1px solid var(--rah-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
@@ -1755,7 +1755,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 <div style={{
                   fontSize: '15px',
                   fontWeight: 600,
-                  color: '#e5e5e5'
+                  color: 'var(var(--rah-text-base))'
                 }}>
                   Edit Dimension
                 </div>
@@ -1779,7 +1779,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: '#666'
+                color: 'var(var(--rah-text-muted))'
               }}
             >
               <X size={16} />
@@ -1800,7 +1800,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 display: 'block',
                 fontSize: '12px',
                 fontWeight: 600,
-                color: '#888',
+                color: 'var(var(--rah-text-muted))',
                 marginBottom: '8px',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em'
@@ -1816,10 +1816,10 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   width: '100%',
                   minHeight: '80px',
                   padding: '12px',
-                  background: '#111',
+                  background: 'var(var(--rah-bg-surface))',
                   border: '1px solid #333',
                   borderRadius: '8px',
-                  color: '#e5e5e5',
+                  color: 'var(var(--rah-text-base))',
                   fontSize: '13px',
                   resize: 'vertical',
                   outline: 'none'
@@ -1834,7 +1834,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               <div style={{
                 marginTop: '4px',
                 fontSize: '11px',
-                color: '#555',
+                color: 'var(var(--rah-text-muted))',
                 textAlign: 'right'
               }}>
                 {editModalDescription.length}/500
@@ -1847,7 +1847,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 display: 'block',
                 fontSize: '12px',
                 fontWeight: 600,
-                color: '#888',
+                color: 'var(var(--rah-text-muted))',
                 marginBottom: '8px',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em'
@@ -1864,7 +1864,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
           {/* Footer */}
           <div style={{
             padding: '16px 20px',
-            borderTop: '1px solid #1a1a1a',
+            borderTop: '1px solid var(--rah-border)',
             display: 'flex',
             justifyContent: 'flex-end',
             gap: '8px'
@@ -1876,7 +1876,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 background: 'transparent',
                 border: '1px solid #333',
                 borderRadius: '6px',
-                color: '#888',
+                color: 'var(var(--rah-text-muted))',
                 fontSize: '13px',
                 fontWeight: 500,
                 cursor: 'pointer'

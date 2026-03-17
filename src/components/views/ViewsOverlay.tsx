@@ -44,7 +44,7 @@ function PendingNodeCard({ pending, onDismiss }: { pending: PendingNode; onDismi
     <div style={{
       padding: '10px 12px',
       background: 'transparent',
-      borderBottom: '1px solid #141414',
+      borderBottom: '1px solid var(--rah-bg-panel)',
       borderLeft: `3px solid ${isError ? '#ef4444' : '#22c55e'}`,
       opacity: 0.8,
     }}>
@@ -53,7 +53,7 @@ function PendingNodeCard({ pending, onDismiss }: { pending: PendingNode; onDismi
           width: '32px',
           height: '32px',
           borderRadius: '8px',
-          background: '#141414',
+          background: 'var(var(--rah-bg-panel))',
           border: `1px solid ${isError ? 'rgba(239,68,68,0.3)' : '#1f1f1f'}`,
           display: 'flex',
           alignItems: 'center',
@@ -81,7 +81,7 @@ function PendingNodeCard({ pending, onDismiss }: { pending: PendingNode; onDismi
           </div>
           <div style={{
             fontSize: '11px',
-            color: '#555',
+            color: 'var(var(--rah-text-muted))',
             marginTop: '2px',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -97,7 +97,7 @@ function PendingNodeCard({ pending, onDismiss }: { pending: PendingNode; onDismi
               padding: '4px',
               background: 'transparent',
               border: 'none',
-              color: '#555',
+              color: 'var(var(--rah-text-muted))',
               cursor: 'pointer',
               borderRadius: '4px',
               display: 'flex',
@@ -421,7 +421,7 @@ export default function ViewsOverlay({
           background: 'transparent',
           cursor: 'pointer',
           transition: 'all 0.15s ease',
-          borderBottom: '1px solid #141414',
+          borderBottom: '1px solid var(--rah-bg-panel)',
           borderLeft: '3px solid transparent',
           opacity: isDragSource ? 0.4 : 1,
           borderTop: isDropTarget ? '2px solid #22c55e' : '2px solid transparent',
@@ -476,8 +476,8 @@ export default function ViewsOverlay({
             width: '32px',
             height: '32px',
             borderRadius: '8px',
-            background: '#141414',
-            border: '1px solid #1f1f1f',
+            background: 'var(var(--rah-bg-panel))',
+            border: '1px solid var(--rah-bg-active)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -495,7 +495,7 @@ export default function ViewsOverlay({
               <span style={{
                 fontSize: '13px',
                 fontWeight: 500,
-                color: '#f0f0f0',
+                color: 'var(var(--rah-text-active))',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -507,7 +507,7 @@ export default function ViewsOverlay({
               {node.edge_count != null && node.edge_count > 0 && (
                 <span style={{
                   fontSize: '10px',
-                  color: '#555',
+                  color: 'var(var(--rah-text-muted))',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '2px',
@@ -520,7 +520,7 @@ export default function ViewsOverlay({
               <span style={{
                 fontSize: '10px',
                 color: '#444',
-                background: '#141414',
+                background: 'var(var(--rah-bg-panel))',
                 padding: '2px 6px',
                 borderRadius: '4px',
                 fontFamily: 'monospace',
@@ -532,7 +532,7 @@ export default function ViewsOverlay({
             {descPreview && (
               <div style={{
                 fontSize: '11px',
-                color: '#666',
+                color: 'var(var(--rah-text-muted))',
                 lineHeight: '1.4',
                 marginBottom: '4px',
                 overflow: 'hidden',
@@ -564,7 +564,7 @@ export default function ViewsOverlay({
                     </span>
                   ))}
                   {node.dimensions.length > 3 && (
-                    <span style={{ fontSize: '9px', color: '#555' }}>
+                    <span style={{ fontSize: '9px', color: 'var(var(--rah-text-muted))' }}>
                       +{node.dimensions.length - 3}
                     </span>
                   )}
@@ -622,7 +622,7 @@ export default function ViewsOverlay({
           ))}
 
           {externalDimensionFilter && (
-            <span style={{ fontSize: '11px', color: '#666' }}>
+            <span style={{ fontSize: '11px', color: 'var(var(--rah-text-muted))' }}>
               Sidebar filter
             </span>
           )}
@@ -641,7 +641,7 @@ export default function ViewsOverlay({
                 gap: '4px',
                 padding: '4px 8px',
                 background: 'transparent',
-                border: '1px solid #222',
+                border: '1px solid var(--rah-border-strong)',
                 borderRadius: '5px',
                 color: externalDimensionFilter ? '#4b4b4b' : '#888',
                 fontSize: '11px',
@@ -670,8 +670,8 @@ export default function ViewsOverlay({
                 top: '100%',
                 left: 0,
                 marginTop: '4px',
-                background: '#141414',
-                border: '1px solid #222',
+                background: 'var(var(--rah-bg-panel))',
+                border: '1px solid var(--rah-border-strong)',
                 borderRadius: '10px',
                 padding: '6px',
                 minWidth: '220px',
@@ -689,10 +689,10 @@ export default function ViewsOverlay({
                   style={{
                     width: '100%',
                     padding: '7px 10px',
-                    background: '#0d0d0d',
+                    background: 'var(var(--rah-bg-surface))',
                     border: '1px solid transparent',
                     borderRadius: '6px',
-                    color: '#f0f0f0',
+                    color: 'var(var(--rah-text-active))',
                     fontSize: '12px',
                     marginBottom: '4px',
                     outline: 'none',
@@ -701,11 +701,11 @@ export default function ViewsOverlay({
                   onBlur={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
                 />
                 {dimensionsLoading ? (
-                  <div style={{ padding: '12px', color: '#666', fontSize: '12px', textAlign: 'center' }}>
+                  <div style={{ padding: '12px', color: 'var(var(--rah-text-muted))', fontSize: '12px', textAlign: 'center' }}>
                     Loading dimensions...
                   </div>
                 ) : filterPickerDimensions.length === 0 ? (
-                  <div style={{ padding: '12px', color: '#666', fontSize: '12px', textAlign: 'center' }}>
+                  <div style={{ padding: '12px', color: 'var(var(--rah-text-muted))', fontSize: '12px', textAlign: 'center' }}>
                     {filterSearchQuery ? 'No matching dimensions' : 'No dimensions available'}
                   </div>
                 ) : (
@@ -722,7 +722,7 @@ export default function ViewsOverlay({
                         background: 'transparent',
                         border: 'none',
                         borderRadius: '5px',
-                        color: '#ccc',
+                        color: 'var(var(--rah-text-secondary))',
                         fontSize: '12px',
                         cursor: 'pointer',
                         textAlign: 'left'
@@ -732,9 +732,9 @@ export default function ViewsOverlay({
                     >
                       <span>{d.dimension}</span>
                       <span style={{
-                        color: '#555',
+                        color: 'var(var(--rah-text-muted))',
                         fontSize: '10px',
-                        background: '#1a1a1a',
+                        background: 'var(var(--rah-bg-active))',
                         padding: '1px 6px',
                         borderRadius: '10px',
                       }}>
@@ -754,7 +754,7 @@ export default function ViewsOverlay({
                 padding: '4px 8px',
                 background: 'transparent',
                 border: 'none',
-                color: '#666',
+                color: 'var(var(--rah-text-muted))',
                 fontSize: '11px',
                 cursor: 'pointer'
               }}
@@ -776,9 +776,9 @@ export default function ViewsOverlay({
               gap: '4px',
               padding: '5px 8px',
               background: 'transparent',
-              border: '1px solid #222',
+              border: '1px solid var(--rah-border-strong)',
               borderRadius: '5px',
-              color: '#888',
+              color: 'var(var(--rah-text-muted))',
               fontSize: '11px',
               cursor: 'pointer',
               transition: 'all 0.15s ease',
@@ -804,8 +804,8 @@ export default function ViewsOverlay({
               top: '100%',
               right: 0,
               marginTop: '4px',
-              background: '#141414',
-              border: '1px solid #222',
+              background: 'var(var(--rah-bg-panel))',
+              border: '1px solid var(--rah-border-strong)',
               borderRadius: '10px',
               padding: '4px',
               minWidth: '140px',
@@ -856,7 +856,7 @@ export default function ViewsOverlay({
       {toolbarHost ? createPortal(toolbar, toolbarHost) : (
         <div style={{
           padding: '10px 16px',
-          borderBottom: '1px solid #1a1a1a',
+          borderBottom: '1px solid var(--rah-border)',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -868,11 +868,11 @@ export default function ViewsOverlay({
 
       {/* Content area — list view */}
       {filteredNodesLoading ? (
-        <div style={{ padding: '40px', color: '#888', textAlign: 'center' }}>
+        <div style={{ padding: '40px', color: 'var(var(--rah-text-muted))', textAlign: 'center' }}>
           Loading...
         </div>
       ) : filteredNodes.length === 0 ? (
-        <div style={{ padding: '40px', color: '#888', textAlign: 'center' }}>
+        <div style={{ padding: '40px', color: 'var(var(--rah-text-muted))', textAlign: 'center' }}>
           {selectedFilters.length > 0 ? 'No nodes match the selected filters.' : 'No nodes yet. Add some content to get started.'}
         </div>
       ) : (
