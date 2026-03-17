@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Search,
   Plus,
@@ -11,6 +11,8 @@ import {
   Table2,
   BookOpen,
   Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import type { PaneType } from '../panes/types';
 
@@ -20,127 +22,74 @@ interface LeftToolbarProps {
   onRefreshClick: () => void;
   onSettingsClick: () => void;
   onPaneTypeClick: (paneType: PaneType) => void;
-  activePane: 'A' | 'B';
-  slotAType: PaneType | null;
-  slotBType: PaneType | null;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
+  openTabTypes: Set<PaneType>;
+  activeTabType: PaneType | null;
 }
 
-// Map pane types to their icons (chat removed in rah-light, guides moved to settings)
-const PANE_TYPE_ICONS: Record<string, typeof LayoutList> = {
-  views: LayoutList,
-  map: Map,
-  dimensions: Folder,
-  table: Table2,
-  skills: BookOpen,
-};
+const NAV_WIDTH_COLLAPSED = 50;
+const NAV_WIDTH_EXPANDED = 280;
 
-const PANE_TYPE_LABELS: Record<string, string> = {
-  views: 'Feed',
-  map: 'Map',
-  dimensions: 'Dimensions',
-  table: 'Table',
-  skills: 'Skills',
-};
+const VIEW_ITEMS: Array<{ paneType: PaneType; label: string; icon: typeof LayoutList }> = [
+  { paneType: 'views', label: 'Nodes', icon: LayoutList },
+  { paneType: 'skills', label: 'Skills', icon: BookOpen },
+  { paneType: 'map', label: 'Map', icon: Map },
+  { paneType: 'dimensions', label: 'Dimension', icon: Folder },
+  { paneType: 'table', label: 'Table', icon: Table2 },
+];
 
-// Pane types shown in the toolbar center section (skills is pinned above settings)
-const TOOLBAR_PANE_TYPES: PaneType[] = ['views', 'map', 'dimensions', 'table'];
-
-interface ToolbarButtonProps {
+function NavButton({
+  icon: Icon,
+  label,
+  expanded,
+  active,
+  onClick,
+  trailing,
+  activeTone = 'neutral',
+}: {
   icon: typeof Search;
   label: string;
-  shortcut?: string;
+  expanded: boolean;
+  active?: boolean;
   onClick: () => void;
-  disabled?: boolean;
-  isActive?: boolean;
-}
-
-function ToolbarButton({ icon: Icon, label, shortcut, onClick, disabled, isActive }: ToolbarButtonProps) {
-  const [isHovered, setIsHovered] = useState(false);
+  trailing?: ReactNode;
+  activeTone?: 'neutral' | 'green';
+}) {
+  const [hovered, setHovered] = useState(false);
+  const activeColor = activeTone === 'green' ? '#22c55e' : '#f0f0f0';
 
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      title={shortcut ? `${label} (${shortcut})` : label}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={expanded ? undefined : label}
       style={{
-        width: '36px',
+        width: '100%',
         height: '36px',
         borderRadius: '8px',
         border: 'none',
-        background: isHovered ? '#1a1a1a' : 'transparent',
-        color: isActive ? '#22c55e' : (isHovered ? '#aaa' : '#666'),
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        transition: 'all 0.15s ease',
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      <Icon size={18} />
-    </button>
-  );
-}
-
-interface PaneTypeButtonProps {
-  icon: typeof LayoutList;
-  label: string;
-  paneType: PaneType;
-  isOpen: boolean;
-  isActivePane: boolean;
-  onClick: () => void;
-}
-
-function PaneTypeButton({ icon: Icon, label, paneType, isOpen, isActivePane, onClick }: PaneTypeButtonProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  // Determine color: green if open, brighter if it's the active pane
-  const getColor = () => {
-    if (isOpen) {
-      return isActivePane ? '#4ade80' : '#22c55e'; // Brighter green for active
-    }
-    return isHovered ? '#aaa' : '#666';
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      title={label}
-      style={{
-        width: '36px',
-        height: '36px',
-        borderRadius: '8px',
-        border: 'none',
-        background: isOpen ? '#1a1a1a' : (isHovered ? '#151515' : 'transparent'),
-        color: getColor(),
+        background: active ? '#151515' : (hovered ? '#121212' : 'transparent'),
+        color: active ? activeColor : (hovered ? '#c7c7c7' : '#7a7a7a'),
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: expanded ? 'space-between' : 'center',
+        gap: '10px',
+        padding: expanded ? '0 10px' : '0',
         transition: 'all 0.15s ease',
-        position: 'relative',
       }}
     >
-      <Icon size={18} />
-      {/* Active pane indicator dot */}
-      {isActivePane && isOpen && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '4px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '4px',
-            height: '4px',
-            borderRadius: '50%',
-            background: '#4ade80',
-          }}
-        />
-      )}
+      <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+        <Icon size={18} />
+        {expanded ? (
+          <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {label}
+          </span>
+        ) : null}
+      </span>
+      {expanded ? trailing : null}
     </button>
   );
 }
@@ -151,97 +100,59 @@ export default function LeftToolbar({
   onRefreshClick,
   onSettingsClick,
   onPaneTypeClick,
-  activePane,
-  slotAType,
-  slotBType,
+  isExpanded,
+  onToggleExpanded,
+  openTabTypes,
+  activeTabType,
 }: LeftToolbarProps) {
-  // Determine which pane types are currently open
-  const openPaneTypes = new Set<PaneType>(
-    [slotAType, slotBType].filter((t): t is PaneType => t !== null)
-  );
-
-  // Determine which pane type is in the active pane (null if pane is closed)
-  const activePaneType = activePane === 'A' ? slotAType : slotBType;
-
   return (
     <div
       style={{
-        width: '50px',
+        width: isExpanded ? `${NAV_WIDTH_EXPANDED}px` : `${NAV_WIDTH_COLLAPSED}px`,
         height: '100%',
-        background: '#0a0a0a',
+        background: 'transparent',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        padding: '12px 0',
+        padding: '12px 8px',
         flexShrink: 0,
+        transition: 'width 0.2s ease',
+        overflow: 'hidden',
       }}
     >
-      {/* Top section - Actions */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <ToolbarButton
-          icon={Search}
-          label="Search"
-          shortcut="⌘K"
-          onClick={onSearchClick}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <NavButton
+          icon={isExpanded ? PanelLeftClose : PanelLeftOpen}
+          label={isExpanded ? 'Collapse' : 'Expand'}
+          expanded={isExpanded}
+          onClick={onToggleExpanded}
         />
-        <ToolbarButton
-          icon={Plus}
-          label="Add Stuff"
-          onClick={onAddStuffClick}
-        />
-        <ToolbarButton
-          icon={RefreshCw}
-          label="Refresh"
-          shortcut="⌘⇧R"
-          onClick={onRefreshClick}
-        />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <NavButton icon={Search} label="Search" expanded={isExpanded} onClick={onSearchClick} />
+          <NavButton icon={Plus} label="Add Stuff" expanded={isExpanded} onClick={onAddStuffClick} />
+          <NavButton icon={RefreshCw} label="Refresh" expanded={isExpanded} onClick={onRefreshClick} />
+        </div>
+
+        <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '14px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px' }}>
+            {VIEW_ITEMS.map((item) => (
+              <NavButton
+                key={`${item.paneType}-${item.label}`}
+                icon={item.icon}
+                label={item.label}
+                expanded={isExpanded}
+                active={activeTabType === item.paneType || openTabTypes.has(item.paneType)}
+                onClick={() => onPaneTypeClick(item.paneType)}
+                activeTone="green"
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Middle section - Pane Types */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '4px',
-          padding: '8px 0',
-        }}
-      >
-        {TOOLBAR_PANE_TYPES.map((paneType) => {
-          const Icon = PANE_TYPE_ICONS[paneType];
-          const label = PANE_TYPE_LABELS[paneType];
-          const isOpen = openPaneTypes.has(paneType);
-          const isActivePane = activePaneType === paneType;
-
-          return (
-            <PaneTypeButton
-              key={paneType}
-              icon={Icon}
-              label={label}
-              paneType={paneType}
-              isOpen={isOpen}
-              isActivePane={isActivePane}
-              onClick={() => onPaneTypeClick(paneType)}
-            />
-          );
-        })}
-      </div>
-
-      {/* Bottom section - Skills + Settings */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <PaneTypeButton
-          icon={BookOpen}
-          label="Skills"
-          paneType="skills"
-          isOpen={openPaneTypes.has('skills')}
-          isActivePane={activePaneType === 'skills'}
-          onClick={() => onPaneTypeClick('skills')}
-        />
-        <ToolbarButton
-          icon={Settings}
-          label="Settings"
-          onClick={onSettingsClick}
-        />
+      <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '8px' }}>
+        <NavButton icon={Settings} label="Settings" expanded={isExpanded} onClick={onSettingsClick} />
       </div>
     </div>
   );

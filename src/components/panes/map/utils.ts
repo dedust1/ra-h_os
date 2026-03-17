@@ -15,6 +15,8 @@ const DIMENSION_COLORS = [
   '#a855f7', // purple
 ];
 
+export type MapViewMode = 'dimension' | 'hub';
+
 function hashDimensionColor(dimension: string): string {
   let hash = 0;
   for (let i = 0; i < dimension.length; i++) {
@@ -23,10 +25,21 @@ function hashDimensionColor(dimension: string): string {
   return DIMENSION_COLORS[Math.abs(hash) % DIMENSION_COLORS.length];
 }
 
+export function getOrderedDimensions(dimensions: string[] | undefined): string[] {
+  if (!dimensions || dimensions.length === 0) {
+    return [];
+  }
+  return [...dimensions].sort((a, b) => a.localeCompare(b));
+}
+
+export function getPrimaryDimension(dimensions: string[] | undefined): string {
+  const ordered = getOrderedDimensions(dimensions);
+  return ordered[0] || 'Unsorted';
+}
+
 export function getDimensionColor(dimensions: string[] | undefined): string | undefined {
-  if (!dimensions || dimensions.length === 0) return undefined;
-  // Use first dimension for border color
-  return hashDimensionColor(dimensions[0]);
+  const primary = getPrimaryDimension(dimensions);
+  return primary === 'Unsorted' ? '#4b5563' : hashDimensionColor(primary);
 }
 
 export interface RahNodeData {
@@ -37,74 +50,155 @@ export interface RahNodeData {
   dbNode: DbNode;
   dimensionIcons?: Record<string, string>;
   primaryDimensionColor?: string;
+  clusterKey?: string;
   [key: string]: unknown;
 }
 
-const NODE_LIMIT = 200;
-const LABEL_THRESHOLD = 15;
+export const NODE_LIMIT = 200;
+export const LABEL_THRESHOLD = 15;
 
-export { NODE_LIMIT, LABEL_THRESHOLD };
-
-/**
- * Get node position from saved metadata or calculate using Fibonacci spiral.
- */
-export function getNodePosition(
+export function getSavedMapPosition(
   node: DbNode,
-  index: number,
-  total: number,
-  centerX: number,
-  centerY: number,
-  maxEdges: number,
-): { x: number; y: number } {
-  // Check for saved position in metadata
+  viewMode: MapViewMode,
+): { x: number; y: number } | null {
   const metadata = typeof node.metadata === 'string'
     ? safeParseJSON(node.metadata)
     : node.metadata;
-  const savedPos = metadata?.map_position;
-  if (savedPos?.x !== undefined && savedPos?.y !== undefined) {
-    return { x: savedPos.x, y: savedPos.y };
+  const nested = metadata?.map_positions as Record<string, { x?: number; y?: number }> | undefined;
+  const scoped = metadata?.[`map_position_${viewMode}`] as { x?: number; y?: number } | undefined;
+  const saved = nested?.[viewMode] || scoped;
+  if (saved?.x !== undefined && saved?.y !== undefined) {
+    return { x: saved.x, y: saved.y };
+  }
+  return null;
+}
+
+function getAllNodes(baseNodes: DbNode[], expandedNodes: DbNode[]): DbNode[] {
+  const baseIds = new Set(baseNodes.map((node) => node.id));
+  return [...baseNodes, ...expandedNodes.filter((node) => !baseIds.has(node.id))];
+}
+
+function buildDimensionLayout(nodes: DbNode[], centerX: number, centerY: number): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const groups = new Map<string, DbNode[]>();
+  for (const node of nodes) {
+    const key = getPrimaryDimension(node.dimensions);
+    const existing = groups.get(key) || [];
+    existing.push(node);
+    groups.set(key, existing);
   }
 
-  // Fibonacci spiral layout
-  const edgeCount = node.edge_count ?? 0;
-  const edgeRatio = maxEdges > 0 ? edgeCount / maxEdges : 0;
+  const clusterKeys = [...groups.keys()].sort((a, b) => a.localeCompare(b));
+  const columns = Math.max(1, Math.ceil(Math.sqrt(clusterKeys.length || 1)));
+  const clusterGapX = 360;
+  const clusterGapY = 280;
+  const originX = centerX - ((columns - 1) * clusterGapX) / 2;
+  const rows = Math.max(1, Math.ceil(clusterKeys.length / columns));
+  const originY = centerY - ((rows - 1) * clusterGapY) / 2;
 
-  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  const angle = index * goldenAngle;
+  clusterKeys.forEach((clusterKey, clusterIndex) => {
+    const clusterNodes = (groups.get(clusterKey) || []).sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0));
+    const clusterColumn = clusterIndex % columns;
+    const clusterRow = Math.floor(clusterIndex / columns);
+    const clusterCenterX = originX + clusterColumn * clusterGapX;
+    const clusterCenterY = originY + clusterRow * clusterGapY;
+    const clusterCols = Math.max(1, Math.ceil(Math.sqrt(clusterNodes.length)));
 
-  const isLabeled = index < LABEL_THRESHOLD;
-  const labelSpacing = isLabeled ? 60 : 0;
-  const containerSize = Math.min(centerX * 2, centerY * 2);
-  const baseDistance = 80 + labelSpacing + (1 - edgeRatio) * containerSize * 0.35;
-  const distance = baseDistance + index * 4;
+    clusterNodes.forEach((node, index) => {
+      const col = index % clusterCols;
+      const row = Math.floor(index / clusterCols);
+      const x = clusterCenterX + (col - (clusterCols - 1) / 2) * 120 + (row % 2 === 0 ? 0 : 18);
+      const y = clusterCenterY + row * 96;
+      positions.set(String(node.id), { x, y });
+    });
+  });
 
-  return {
-    x: centerX + Math.cos(angle) * distance,
-    y: centerY + Math.sin(angle) * distance,
-  };
+  return positions;
 }
 
-/**
- * Position expanded (traversal) nodes in a circle around a reference node.
- */
-export function getExpandedNodePosition(
-  index: number,
-  total: number,
-  refX: number,
-  refY: number,
-): { x: number; y: number } {
-  const angle = (index / Math.max(total, 1)) * Math.PI * 2;
-  const distance = 150 + (index % 3) * 40;
-  return {
-    x: refX + Math.cos(angle) * distance,
-    y: refY + Math.sin(angle) * distance,
-  };
+function buildHubLayout(
+  nodes: DbNode[],
+  dbEdges: DbEdge[],
+  centerX: number,
+  centerY: number,
+): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const sortedNodes = [...nodes].sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0));
+  const hubCount = Math.max(1, Math.min(10, Math.ceil(Math.sqrt(sortedNodes.length || 1))));
+  const hubs = sortedNodes.slice(0, hubCount);
+  const hubIds = new Set(hubs.map((node) => node.id));
+
+  const adjacency = new Map<number, number[]>();
+  for (const edge of dbEdges) {
+    const from = adjacency.get(edge.from_node_id) || [];
+    from.push(edge.to_node_id);
+    adjacency.set(edge.from_node_id, from);
+
+    const to = adjacency.get(edge.to_node_id) || [];
+    to.push(edge.from_node_id);
+    adjacency.set(edge.to_node_id, to);
+  }
+
+  const clusterMembers = new Map<number, DbNode[]>();
+  for (const hub of hubs) {
+    clusterMembers.set(hub.id, [hub]);
+  }
+
+  const orphanNodes: DbNode[] = [];
+  for (const node of sortedNodes) {
+    if (hubIds.has(node.id)) continue;
+    const neighbours = adjacency.get(node.id) || [];
+    const connectedHub = hubs
+      .filter((hub) => neighbours.includes(hub.id))
+      .sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0))[0];
+
+    if (connectedHub) {
+      const members = clusterMembers.get(connectedHub.id) || [connectedHub];
+      members.push(node);
+      clusterMembers.set(connectedHub.id, members);
+    } else {
+      orphanNodes.push(node);
+    }
+  }
+
+  const hubRadius = Math.max(160, hubCount * 42);
+  hubs.forEach((hub, index) => {
+    const angle = (index / hubCount) * Math.PI * 2 - Math.PI / 2;
+    const hubX = centerX + Math.cos(angle) * hubRadius;
+    const hubY = centerY + Math.sin(angle) * hubRadius;
+    positions.set(String(hub.id), { x: hubX, y: hubY });
+
+    const members = (clusterMembers.get(hub.id) || []).filter((member) => member.id !== hub.id);
+    members.forEach((member, memberIndex) => {
+      const memberAngle = (memberIndex / Math.max(members.length, 1)) * Math.PI * 2;
+      const ringRadius = 115 + Math.floor(memberIndex / 10) * 46;
+      positions.set(String(member.id), {
+        x: hubX + Math.cos(memberAngle) * ringRadius,
+        y: hubY + Math.sin(memberAngle) * ringRadius,
+      });
+    });
+  });
+
+  orphanNodes.forEach((node, index) => {
+    const columns = Math.max(1, Math.ceil(Math.sqrt(orphanNodes.length)));
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    positions.set(String(node.id), {
+      x: centerX - 220 + col * 110,
+      y: centerY + hubRadius + 140 + row * 90,
+    });
+  });
+
+  return positions;
 }
 
-/**
- * Transform DB nodes into React Flow nodes.
- * When a node is selected, non-connected nodes get dimmed via className.
- */
+export function getClusterKey(node: DbNode, viewMode: MapViewMode, dbEdges: DbEdge[]): string {
+  if (viewMode === 'dimension') {
+    return getPrimaryDimension(node.dimensions);
+  }
+  return `hub:${node.id}`;
+}
+
 export function toRFNodes(
   baseNodes: DbNode[],
   expandedNodes: DbNode[],
@@ -113,20 +207,23 @@ export function toRFNodes(
   selectedNodeId: number | null,
   connectedNodeIds: Set<number>,
   existingPositions: Map<string, { x: number; y: number }>,
-  dimensionIcons?: Record<string, string>,
+  dimensionIcons: Record<string, string> | undefined,
+  viewMode: MapViewMode,
+  dbEdges: DbEdge[],
 ): RFNode<RahNodeData>[] {
-  const sortedBase = [...baseNodes].sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0));
-  const maxEdges = Math.max(...sortedBase.map(n => n.edge_count ?? 0), 1);
-  const baseNodeIds = new Set(baseNodes.map(n => n.id));
+  const allNodes = getAllNodes(baseNodes, expandedNodes);
   const hasSelection = selectedNodeId !== null;
+  const clusterLayout = viewMode === 'dimension'
+    ? buildDimensionLayout(allNodes, centerX, centerY)
+    : buildHubLayout(allNodes, dbEdges, centerX, centerY);
+  const baseNodeIds = new Set(baseNodes.map((node) => node.id));
 
-  const rfNodes: RFNode<RahNodeData>[] = sortedBase.map((node, index) => {
+  return allNodes.map((node) => {
     const id = String(node.id);
-    // Prefer React Flow's current position (for drag state), then saved, then calculated
     const existingPos = existingPositions.get(id);
-    const pos = existingPos || getNodePosition(node, index, sortedBase.length, centerX, centerY, maxEdges);
-
-    // Dim nodes that aren't selected or connected to selection
+    const savedPos = getSavedMapPosition(node, viewMode);
+    const fallbackPos = clusterLayout.get(id) || { x: centerX, y: centerY };
+    const pos = existingPos || savedPos || fallbackPos;
     const isDimmed = hasSelection && node.id !== selectedNodeId && !connectedNodeIds.has(node.id);
 
     return {
@@ -136,64 +233,16 @@ export function toRFNodes(
       className: isDimmed ? 'dimmed' : undefined,
       data: {
         label: node.title || 'Untitled',
-        dimensions: node.dimensions || [],
+        dimensions: getOrderedDimensions(node.dimensions),
         edgeCount: node.edge_count ?? 0,
-        isExpanded: false,
+        isExpanded: !baseNodeIds.has(node.id),
         dbNode: node,
         dimensionIcons,
         primaryDimensionColor: getDimensionColor(node.dimensions),
+        clusterKey: viewMode === 'dimension' ? getPrimaryDimension(node.dimensions) : undefined,
       },
     };
   });
-
-  // Add expanded nodes not already in base
-  const uniqueExpanded = expandedNodes.filter(n => !baseNodeIds.has(n.id));
-
-  // Find reference position for expanded nodes (the selected node)
-  let refX = centerX;
-  let refY = centerY;
-  if (selectedNodeId) {
-    const selectedRF = rfNodes.find(n => n.id === String(selectedNodeId));
-    if (selectedRF) {
-      refX = selectedRF.position.x;
-      refY = selectedRF.position.y;
-    }
-  }
-
-  uniqueExpanded.forEach((node, index) => {
-    const id = String(node.id);
-    const existingPos = existingPositions.get(id);
-
-    // Check for saved metadata position
-    const metadata = typeof node.metadata === 'string'
-      ? safeParseJSON(node.metadata)
-      : node.metadata;
-    const savedPos = metadata?.map_position;
-
-    const pos = existingPos
-      || (savedPos?.x !== undefined ? { x: savedPos.x, y: savedPos.y } : null)
-      || getExpandedNodePosition(index, uniqueExpanded.length, refX, refY);
-
-    const isDimmed = hasSelection && node.id !== selectedNodeId && !connectedNodeIds.has(node.id);
-
-    rfNodes.push({
-      id,
-      type: 'rahNode',
-      position: pos,
-      className: isDimmed ? 'dimmed' : undefined,
-      data: {
-        label: node.title || 'Untitled',
-        dimensions: node.dimensions || [],
-        edgeCount: node.edge_count ?? 0,
-        isExpanded: true,
-        dbNode: node,
-        dimensionIcons,
-        primaryDimensionColor: getDimensionColor(node.dimensions),
-      },
-    });
-  });
-
-  return rfNodes;
 }
 
 /**

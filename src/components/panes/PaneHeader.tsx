@@ -8,7 +8,9 @@ export default function PaneHeader({
   slot,
   onCollapse,
   onSwapPanes,
-  children
+  tabBar,
+  children,
+  toolbarHostRef,
 }: PaneHeaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -56,32 +58,53 @@ export default function PaneHeader({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        padding: '8px 12px',
+        gap: '10px',
         background: isDragOver ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
-        minHeight: '44px',
         cursor: slot && onSwapPanes ? 'grab' : 'default',
         opacity: isDragging ? 0.5 : 1,
         borderRadius: isDragOver ? '6px' : '0',
         transition: 'background 0.15s ease',
+        padding: '8px 12px',
+        minHeight: '48px',
       }}
     >
-      {/* Children (tabs, etc.) - takes up available space */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}>
-        {children}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+        {tabBar ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}>
+            {tabBar}
+          </div>
+        ) : null}
+        {children ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
+            {children}
+          </div>
+        ) : null}
+        {toolbarHostRef ? (
+          <div
+            ref={toolbarHostRef}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          />
+        ) : null}
+        {!tabBar && !children && !toolbarHostRef ? (
+          <div style={{ color: '#666', fontSize: '12px' }} />
+        ) : null}
       </div>
 
-      {/* Close button (when onCollapse is provided) */}
       {onCollapse && (
         <button
           onClick={onCollapse}
           style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '6px',
-            border: '1px solid #2a2a2a',
-            background: '#111',
-            color: '#777',
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
+            border: '1px solid #3a3a3a',
+            background: '#161616',
+            color: '#c2c2c2',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -91,17 +114,17 @@ export default function PaneHeader({
           }}
           title="Close pane"
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#1a1a1a';
-            e.currentTarget.style.borderColor = '#3a3a3a';
-            e.currentTarget.style.color = '#aaa';
+            e.currentTarget.style.background = 'rgba(127, 29, 29, 0.22)';
+            e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.5)';
+            e.currentTarget.style.color = '#fca5a5';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#111';
-            e.currentTarget.style.borderColor = '#2a2a2a';
-            e.currentTarget.style.color = '#777';
+            e.currentTarget.style.background = '#161616';
+            e.currentTarget.style.borderColor = '#3a3a3a';
+            e.currentTarget.style.color = '#c2c2c2';
           }}
         >
-          <X size={14} />
+          <X size={15} strokeWidth={2.25} />
         </button>
       )}
     </div>

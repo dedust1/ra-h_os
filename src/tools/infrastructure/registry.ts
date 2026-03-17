@@ -3,6 +3,7 @@ import { queryNodesTool } from '../database/queryNodes';
 import { getNodesByIdTool } from '../database/getNodesById';
 import { createNodeTool } from '../database/createNode';
 import { updateNodeTool } from '../database/updateNode';
+import { deleteNodeTool } from '../database/deleteNode';
 import { createEdgeTool } from '../database/createEdge';
 import { queryEdgeTool } from '../database/queryEdge';
 import { updateEdgeTool } from '../database/updateEdge';
@@ -43,6 +44,7 @@ const ORCHESTRATION_TOOLS: Record<string, any> = {
 const EXECUTION_TOOLS: Record<string, any> = {
   createNode: createNodeTool,
   updateNode: updateNodeTool,
+  deleteNode: deleteNodeTool,
   createEdge: createEdgeTool,
   updateEdge: updateEdgeTool,
   createDimension: createDimensionTool,
@@ -71,6 +73,7 @@ const ORCHESTRATOR_TOOL_NAMES = Array.from(new Set([
   'think',
   'createNode',
   'updateNode',
+  'deleteNode',
   'createEdge',
   'updateEdge',
   'createDimension',

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Filter, ChevronDown, ChevronLeft, ChevronRight, X, ArrowUpDown, Search, ExternalLink } from 'lucide-react';
 import type { Node } from '@/types/database';
 
@@ -24,6 +25,7 @@ interface DimensionSummary {
 interface DatabaseTableViewProps {
   onNodeClick: (nodeId: number) => void;
   refreshToken?: number;
+  toolbarHost?: HTMLDivElement | null;
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -56,7 +58,7 @@ function formatDate(dateStr: string | null | undefined): string {
   }
 }
 
-export default function DatabaseTableView({ onNodeClick, refreshToken = 0 }: DatabaseTableViewProps) {
+export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolbarHost }: DatabaseTableViewProps) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -161,18 +163,15 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0 }: Dat
   const startItem = (page - 1) * PAGE_SIZE + 1;
   const endItem = Math.min(page * PAGE_SIZE, total);
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
-      {/* Compact toolbar */}
-      <div style={{
-        padding: '8px 12px',
-        borderBottom: '1px solid #1a1a1a',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-      }}>
-        {/* Search */}
-        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
+  const toolbar = (
+    <div style={{
+      width: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      minWidth: 0,
+    }}>
+      <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -392,6 +391,21 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0 }: Dat
           </button>
         </div>
       </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent' }}>
+      {toolbarHost ? createPortal(toolbar, toolbarHost) : (
+        <div style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid #1a1a1a',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          {toolbar}
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ flex: 1, overflow: 'auto' }}>

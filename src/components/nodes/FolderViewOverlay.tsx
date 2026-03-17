@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, X, ArrowLeft, Plus, Trash2, Edit2, Lock } from 'lucide-react';
 import type { Node } from '@/types/database';
 import ConfirmDialog from '../common/ConfirmDialog';
@@ -23,11 +24,12 @@ interface FolderViewOverlayProps {
   refreshToken: number;
   onDataChanged?: () => void;
   onDimensionSelect?: (dimensionName: string | null) => void;
+  toolbarHost?: HTMLDivElement | null;
 }
 
 const PAGE_SIZE = 100;
 
-export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, onDataChanged, onDimensionSelect: _onDimensionSelect }: FolderViewOverlayProps) {
+export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, onDataChanged, onDimensionSelect, toolbarHost }: FolderViewOverlayProps) {
   const [view, setView] = useState<'dimensions' | 'nodes'>('dimensions');
   const [dimensions, setDimensions] = useState<DimensionSummary[]>([]);
   const [dimensionsLoading, setDimensionsLoading] = useState(true);
@@ -202,11 +204,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
   };
 
   const handleSelectDimension = (dimension: DimensionSummary) => {
-    setSelectedDimension(dimension);
-    setNodes([]);
-    setNodeOffset(0);
-    setHasMoreNodes(false);
-    setView('nodes');
+    onDimensionSelect?.(dimension.dimension);
   };
 
   const handleBackToDimensions = () => {
@@ -215,6 +213,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
     setNodes([]);
     setNodeOffset(0);
     setHasMoreNodes(false);
+    onDimensionSelect?.(null);
   };
 
   const handleAddDimension = async (name: string) => {
@@ -1563,6 +1562,96 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
     );
   };
 
+  const toolbar = (
+    <div style={{
+      width: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '8px',
+      minWidth: 0
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+        {view === 'nodes' && (
+          <button
+            onClick={handleBackToDimensions}
+            style={{
+              padding: '6px',
+              borderRadius: '6px',
+              border: '1px solid #1f1f1f',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: '#cbd5f5'
+            }}
+          >
+            <ArrowLeft size={16} />
+          </button>
+        )}
+        {view === 'nodes' && (
+          <div style={{
+            fontSize: '12px',
+            color: '#7de8a5',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}>
+            {selectedDimension?.dimension ?? ''}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {view === 'dimensions' && (
+          <button
+            onClick={() => setShowAddDimensionDialog(true)}
+            title="Add dimension"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              color: '#555',
+              background: 'transparent',
+              border: '1px solid #1f1f1f',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#22c55e'; e.currentTarget.style.borderColor = '#22c55e'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; e.currentTarget.style.borderColor = '#1f1f1f'; }}
+          >
+            <Plus size={14} />
+          </button>
+        )}
+
+        {!toolbarHost && (
+          <button
+            onClick={onClose}
+            title="Close"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              border: '1px solid #1f1f1f',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: '#555',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#888'; e.currentTarget.style.background = '#1a1a1a'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; e.currentTarget.style.background = 'transparent'; }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <>
     <div
@@ -1572,105 +1661,17 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
         left: 0,
         right: 0,
         bottom: 0,
-        background: '#050505',
-        borderRadius: '4px',
-        border: '1px solid #1a1a1a',
+        background: 'transparent',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 5
       }}
     >
-      {/* Header */}
-      <div style={{ borderBottom: '1px solid #1a1a1a' }}>
-        {/* Top row: Mode tabs + Actions */}
-        <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* Back button when viewing nodes in a dimension */}
-            {view === 'nodes' && (
-              <button
-                onClick={handleBackToDimensions}
-                style={{
-                  padding: '6px',
-                  borderRadius: '6px',
-                  border: '1px solid #1f1f1f',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: '#cbd5f5'
-                }}
-              >
-                <ArrowLeft size={16} />
-              </button>
-            )}
-
-            {view === 'dimensions' && (
-              <div style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <DynamicIcon name="Folder" size={14} style={{ color: '#22c55e' }} />
-                Dimensions
-              </div>
-            )}
-
-            {/* Title when viewing nodes in a dimension */}
-            {view === 'nodes' && (
-              <div style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>Nodes –</span>
-                <span style={{ color: '#22c55e' }}>{selectedDimension?.dimension ?? ''}</span>
-              </div>
-            )}
-
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {/* Add Dimension button */}
-            {view === 'dimensions' && (
-              <button
-                onClick={() => setShowAddDimensionDialog(true)}
-                title="Add dimension"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '28px',
-                  height: '28px',
-                  color: '#555',
-                  background: 'transparent',
-                  border: '1px solid #1f1f1f',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#22c55e'; e.currentTarget.style.borderColor = '#22c55e'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; e.currentTarget.style.borderColor = '#1f1f1f'; }}
-              >
-                <Plus size={14} />
-              </button>
-            )}
-
-
-            <button
-              onClick={onClose}
-              title="Close"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '28px',
-                height: '28px',
-                borderRadius: '6px',
-                border: '1px solid #1f1f1f',
-                background: 'transparent',
-                cursor: 'pointer',
-                color: '#555',
-                transition: 'all 0.15s'
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = '#888'; e.currentTarget.style.background = '#1a1a1a'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; e.currentTarget.style.background = 'transparent'; }}
-            >
-              <X size={14} />
-            </button>
-          </div>
+      {toolbarHost ? createPortal(toolbar, toolbarHost) : (
+        <div style={{ borderBottom: '1px solid #1a1a1a', padding: '12px 16px' }}>
+          {toolbar}
         </div>
-
-      </div>
+      )}
 
       {/* Content */}
       {view === 'nodes' ? renderNodeGrid() : renderDimensionGrid()}

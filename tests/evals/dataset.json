@@ -1,11 +1,13 @@
 {
   "id": "golden-ra-h-core-v2",
   "name": "Golden RA-H Core v2",
-  "description": "Slim 5-scenario eval set for core RA-H usage: focused graph writes, skill-guided writes, indexed node search, chunk-grounded insight creation, and hub traversal.",
+  "description": "Core RA-H eval set covering database, tools, skills, search, and ingestion behavior, including graph writes, indexed node search, retrieval regressions, chunk-grounded insight creation, and hub traversal.",
   "inherits": "golden-v1",
   "version": 2,
   "focus": [
     "tool-call correctness",
+    "category-based coverage",
+    "search regressions",
     "skill usage only when appropriate",
     "core retrieval/write behavior",
     "latency/tokens/cost guards"

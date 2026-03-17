@@ -1,3 +1,5 @@
+export type EvalCategory = 'database' | 'tools' | 'skills' | 'search' | 'ingestion';
+
 export type ScenarioExpectations = {
   skillsRead?: string[];
   skillsReadSoft?: string[];
@@ -32,6 +34,7 @@ export type Scenario = {
   expect?: ScenarioExpectations;
   description?: string;
   tools?: string[];
+  categories?: EvalCategory[];
   suites?: string[];
   enabled?: boolean;
   notes?: string;

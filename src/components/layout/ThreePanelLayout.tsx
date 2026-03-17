@@ -45,16 +45,17 @@ export default function ThreePanelLayout() {
 
   // Slot states - the core of the flexible pane system
   // Default: Feed on left, closed on right (chat removed in rah-light)
-  const [slotA, setSlotA] = usePersistentState<SlotState | null>('ui.slotA.v4', {
+  const [slotA, setSlotA] = usePersistentState<SlotState | null>('ui.slotA.v5', {
     type: 'views',
   });
 
   // SlotB can be null (closed) or a SlotState
   // Default: closed (chat removed in rah-light)
-  const [slotB, setSlotB] = usePersistentState<SlotState | null>('ui.slotB.v4', null);
+  const [slotB, setSlotB] = usePersistentState<SlotState | null>('ui.slotB.v5', null);
 
   // SlotB width as percentage (when open)
   const [slotBWidth, setSlotBWidth] = usePersistentState<number>('ui.slotBWidth', 50);
+  const [leftNavExpanded, setLeftNavExpanded] = usePersistentState<boolean>('ui.leftNavExpanded', false);
 
   // Migration: if a slot was persisted with type 'guides' (now moved to settings), reset it
   useEffect(() => {
@@ -62,6 +63,12 @@ export default function ThreePanelLayout() {
       setSlotA({ type: 'views' });
     }
     if (slotB && (slotB.type as string) === 'guides') {
+      setSlotB(null);
+    }
+    if (slotA?.type === 'node') {
+      setSlotA({ type: 'views' });
+    }
+    if (slotB?.type === 'node') {
       setSlotB(null);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -96,6 +103,7 @@ export default function ThreePanelLayout() {
 
   // Active dimension tracking
   const [activeDimension, setActiveDimension] = usePersistentState<string | null>('ui.focus.activeDimension', null);
+  const [browseDimensionFilter, setBrowseDimensionFilter] = useState<string | null>(null);
 
   // Delegations state (deprecated - kept for component compatibility)
   const [delegationsMap] = useState<Record<string, AgentDelegation>>({});
@@ -485,6 +493,37 @@ export default function ThreePanelLayout() {
     setNodesPanelRefresh(prev => prev + 1);
   }, []);
 
+  const openPaneSingleton = useCallback((paneType: PaneType) => {
+    if (paneType !== 'node') {
+      if (slotA?.type === paneType) {
+        setActivePane('A');
+        return;
+      }
+      if (slotB?.type === paneType) {
+        setActivePane('B');
+        return;
+      }
+    }
+
+    if (!slotA) {
+      setSlotA({ type: paneType });
+      setActivePane('A');
+      return;
+    }
+
+    if (!slotB) {
+      setSlotB({ type: paneType });
+      setActivePane('B');
+      return;
+    }
+
+    if (activePane === 'A') {
+      setSlotA(prev => prev ? ({ ...prev, type: paneType }) : { type: paneType });
+    } else {
+      setSlotB(prev => prev ? ({ ...prev, type: paneType }) : { type: paneType });
+    }
+  }, [activePane, slotA, slotB, setSlotA, setSlotB]);
+
   const handleNodeOpenFromDimensions = useCallback((nodeId: number) => {
     // Switch to node pane and open the node
     const currentTabs = slotA?.type === 'node' ? (slotA.nodeTabs || []) : [];
@@ -499,35 +538,26 @@ export default function ThreePanelLayout() {
     setActivePane('A');
   }, [slotA, setSlotA]);
 
-  // Handle pane type selection from toolbar
-  const handlePaneTypeClick = useCallback((paneType: PaneType) => {
-    // If no panes open → open in slot A
-    if (!slotA) {
-      setSlotA({ type: paneType });
-      setActivePane('A');
-      return;
-    }
+  const handleDimensionPaneSelect = useCallback((dimensionName: string | null) => {
+    setBrowseDimensionFilter(dimensionName);
+    setActiveDimension(dimensionName);
 
-    // If only one pane open → open second pane with this type
-    if (!slotB) {
-      setSlotB({ type: paneType });
+    if (!dimensionName) return;
+
+    if (activePane === 'B' && slotB?.type === 'dimensions') {
+      setSlotB({ type: 'views' });
       setActivePane('B');
       return;
     }
 
-    // Two panes open → replace the active pane
-    if (activePane === 'A') {
-      setSlotA(prev => prev ? ({
-        ...prev,
-        type: paneType,
-      }) : { type: paneType });
-    } else {
-      setSlotB(prev => prev ? ({
-        ...prev,
-        type: paneType,
-      }) : { type: paneType });
-    }
-  }, [activePane, slotA, slotB, setSlotA, setSlotB]);
+    setSlotA({ type: 'views' });
+    setActivePane('A');
+  }, [activePane, slotB, setSlotA, setSlotB, setActiveDimension]);
+
+  // Handle pane type selection from toolbar
+  const handlePaneTypeClick = useCallback((paneType: PaneType) => {
+    openPaneSingleton(paneType);
+  }, [openPaneSingleton]);
 
   // Ensure the Feed pane is visible (for quick-add loading placeholders)
   const ensureFeedOpen = useCallback(() => {
@@ -596,25 +626,19 @@ export default function ThreePanelLayout() {
   const handleSlotAAction = useCallback((action: PaneAction) => {
     switch (action.type) {
       case 'switch-pane-type':
-        setSlotA(prev => ({
-          ...prev,
-          type: action.paneType,
-        }));
+        openPaneSingleton(action.paneType);
         break;
       case 'open-node':
         handleNodeSelect(action.nodeId, false);
         break;
     }
-  }, [handleNodeSelect, setSlotA]);
+  }, [handleNodeSelect, openPaneSingleton]);
 
   const handleSlotBAction = useCallback((action: PaneAction) => {
     if (!slotB) return;
     switch (action.type) {
       case 'switch-pane-type':
-        setSlotB(prev => prev ? ({
-          ...prev,
-          type: action.paneType,
-        }) : null);
+        openPaneSingleton(action.paneType);
         break;
       case 'open-node':
         // Open node in slot B (if it's a node pane)
@@ -636,7 +660,7 @@ export default function ThreePanelLayout() {
         }
         break;
     }
-  }, [slotB, setSlotB]);
+  }, [slotB, setSlotB, openPaneSingleton]);
 
   // Open a node directly in Slot B (for Alt+Click)
   const handleNodeOpenInSlotB = useCallback((nodeId: number) => {
@@ -909,7 +933,7 @@ export default function ThreePanelLayout() {
             onNodeOpen={handleNodeOpenFromDimensions}
             refreshToken={folderViewRefresh}
             onDataChanged={handleFolderViewDataChanged}
-            onDimensionSelect={setActiveDimension}
+            onDimensionSelect={handleDimensionPaneSelect}
           />
         );
 
@@ -942,6 +966,11 @@ export default function ThreePanelLayout() {
             refreshToken={nodesPanelRefresh}
             pendingNodes={pendingNodes}
             onDismissPending={(id) => setPendingNodes(prev => prev.filter(p => p.id !== id))}
+            externalDimensionFilter={browseDimensionFilter}
+            onClearExternalDimensionFilter={() => {
+              setBrowseDimensionFilter(null);
+              setActiveDimension(null);
+            }}
           />
         );
 
@@ -998,9 +1027,10 @@ export default function ThreePanelLayout() {
           setShowSettings(true);
         }}
         onPaneTypeClick={handlePaneTypeClick}
-        activePane={activePane}
-        slotAType={slotA?.type ?? null}
-        slotBType={slotB?.type ?? null}
+        isExpanded={leftNavExpanded}
+        onToggleExpanded={() => setLeftNavExpanded(prev => !prev)}
+        openTabTypes={new Set([slotA?.type, slotB?.type].filter((t): t is PaneType => t != null))}
+        activeTabType={activePane === 'A' ? slotA?.type ?? null : slotB?.type ?? null}
         onRefreshClick={handleRefreshAll}
       />
 

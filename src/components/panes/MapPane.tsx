@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties }
 import {
   ReactFlow,
   Background,
-  MiniMap,
   useNodesState,
   useEdgesState,
   addEdge as rfAddEdge,
@@ -22,10 +21,11 @@ import PaneHeader from './PaneHeader';
 import type { MapPaneProps } from './types';
 import { ChevronDown } from 'lucide-react';
 
+import { MiniMap } from '@xyflow/react';
 import { RahNode } from './map/RahNode';
 import { RahEdge } from './map/RahEdge';
 import EdgeExplanationModal from './map/EdgeExplanationModal';
-import { toRFNodes, toRFEdges, NODE_LIMIT, type RahNodeData } from './map/utils';
+import { getPrimaryDimension, toRFNodes, toRFEdges, NODE_LIMIT, type MapViewMode, type RahNodeData } from './map/utils';
 import { useDimensionIcons } from '@/context/DimensionIconsContext';
 import './map/map-styles.css';
 
@@ -74,6 +74,7 @@ function MapPaneInner({
   // --- UI state ---
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<MapViewMode>('dimension');
   const [dimensionDropdownOpen, setDimensionDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +87,7 @@ function MapPaneInner({
 
   // Track current RF positions so we can preserve them across data refreshes
   const rfPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const hasInitialFitRef = useRef(false);
 
   // Combine base + expanded
   const allDbNodes = useMemo(() => {
@@ -114,6 +116,26 @@ function MapPaneInner({
     () => new Set(lockedDimensions.map(d => d.dimension)),
     [lockedDimensions],
   );
+
+  const clusterLabels = useMemo(() => {
+    if (viewMode !== 'dimension') {
+      return [];
+    }
+    const grouped = new Map<string, { x: number; y: number; count: number }>();
+    for (const node of rfNodes) {
+      const dimension = getPrimaryDimension((node.data as RahNodeData).dimensions);
+      const current = grouped.get(dimension) || { x: 0, y: 0, count: 0 };
+      current.x += node.position.x;
+      current.y += node.position.y;
+      current.count += 1;
+      grouped.set(dimension, current);
+    }
+    return [...grouped.entries()].map(([dimension, totals]) => ({
+      dimension,
+      x: totals.x / totals.count,
+      y: totals.y / totals.count - 84,
+    }));
+  }, [rfNodes, viewMode]);
 
   // ----- Close dropdown on outside click -----
   useEffect(() => {
@@ -157,9 +179,7 @@ function MapPaneInner({
         if (dimsRes.ok) {
           const dimsPayload = await dimsRes.json();
           if (dimsPayload.success && dimsPayload.data) {
-            setLockedDimensions(
-              (dimsPayload.data as DimensionInfo[]).filter(d => d.isPriority),
-            );
+            setLockedDimensions(dimsPayload.data as DimensionInfo[]);
           }
         }
       } catch (err) {
@@ -196,6 +216,8 @@ function MapPaneInner({
       connectedNodeIds,
       rfPositionsRef.current,
       dimensionIcons,
+      viewMode,
+      dbEdges,
     );
 
     const nodeIdSet = new Set(newRfNodes.map(n => n.id));
@@ -203,7 +225,47 @@ function MapPaneInner({
 
     setRfNodes(newRfNodes);
     setRfEdges(newRfEdges);
-  }, [allDbNodes, baseNodes, expandedNodes, dbEdges, selectedNodeId, connectedNodeIds]);
+  }, [allDbNodes, baseNodes, expandedNodes, dbEdges, selectedNodeId, connectedNodeIds, dimensionIcons, viewMode]);
+
+  useEffect(() => {
+    if (hasInitialFitRef.current || rfNodes.length === 0 || loading) return;
+    hasInitialFitRef.current = true;
+    const hubNodeIds = baseNodes
+      .sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0))
+      .slice(0, 25)
+      .map(n => String(n.id));
+    setTimeout(() => {
+      if (hubNodeIds.length > 0) {
+        reactFlowInstance.fitView({
+          nodes: hubNodeIds.map(id => ({ id })),
+          padding: 0.3,
+          duration: 300,
+        });
+      }
+    }, 100);
+  }, [rfNodes, loading, baseNodes, reactFlowInstance]);
+
+  useEffect(() => {
+    hasInitialFitRef.current = false;
+  }, [selectedDimension, viewMode]);
+
+  const fitAllNodes = useCallback(() => {
+    reactFlowInstance.fitView({ padding: 0.2, duration: 300 });
+  }, [reactFlowInstance]);
+
+  const fitHubNodes = useCallback(() => {
+    const hubNodeIds = baseNodes
+      .sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0))
+      .slice(0, 25)
+      .map(n => String(n.id));
+    if (hubNodeIds.length > 0) {
+      reactFlowInstance.fitView({
+        nodes: hubNodeIds.map(id => ({ id })),
+        padding: 0.3,
+        duration: 300,
+      });
+    }
+  }, [baseNodes, reactFlowInstance]);
 
   // ----- Node traversal: fetch connected nodes -----
   const fetchConnectedNodes = useCallback(async (nodeId: number) => {
@@ -379,7 +441,7 @@ function MapPaneInner({
 
   // ----- Node drag → save position to metadata (debounced) -----
   const savePositionRef = useRef(
-    debounce(async (nodeId: number, x: number, y: number) => {
+    debounce(async (nodeId: number, x: number, y: number, mode: MapViewMode) => {
       try {
         const res = await fetch(`/api/nodes/${nodeId}`);
         if (!res.ok) return;
@@ -393,7 +455,14 @@ function MapPaneInner({
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            metadata: { ...mergedMeta, map_position: { x, y } },
+            metadata: {
+              ...mergedMeta,
+              map_positions: {
+                ...(mergedMeta.map_positions || {}),
+                [mode]: { x, y },
+              },
+              [`map_position_${mode}`]: { x, y },
+            },
           }),
         });
       } catch (err) {
@@ -406,9 +475,21 @@ function MapPaneInner({
     const nodeId = parseInt(node.id);
     if (!isNaN(nodeId)) {
       rfPositionsRef.current.set(node.id, node.position);
-      savePositionRef.current(nodeId, node.position.x, node.position.y);
+      savePositionRef.current(nodeId, node.position.x, node.position.y, viewMode);
     }
-  }, []);
+  }, [viewMode]);
+
+  useEffect(() => {
+    rfPositionsRef.current.clear();
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (loading || rfNodes.length === 0) return;
+    const timeout = setTimeout(() => {
+      reactFlowInstance.fitView({ padding: 0.22, duration: 300 });
+    }, 80);
+    return () => clearTimeout(timeout);
+  }, [viewMode, selectedDimension, loading, rfNodes, reactFlowInstance]);
 
   // ----- Node click → select + traverse -----
   const onNodeClickHandler: NodeMouseHandler<RFNode<RahNodeData>> = useCallback((_event, node) => {
@@ -481,6 +562,39 @@ function MapPaneInner({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent', overflow: 'hidden' }}>
       <PaneHeader slot={slot} onCollapse={onCollapse} onSwapPanes={onSwapPanes} tabBar={tabBar}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            onClick={() => setViewMode('dimension')}
+            style={{
+              padding: '6px 10px',
+              background: viewMode === 'dimension' ? 'rgba(34, 197, 94, 0.12)' : 'transparent',
+              border: '1px solid',
+              borderColor: viewMode === 'dimension' ? 'rgba(34, 197, 94, 0.35)' : '#2a2a2a',
+              borderRadius: '6px',
+              color: viewMode === 'dimension' ? '#a7f3b8' : '#888',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            Dimension View
+          </button>
+          <button
+            onClick={() => setViewMode('hub')}
+            style={{
+              padding: '6px 10px',
+              background: viewMode === 'hub' ? 'rgba(34, 197, 94, 0.12)' : 'transparent',
+              border: '1px solid',
+              borderColor: viewMode === 'hub' ? 'rgba(34, 197, 94, 0.35)' : '#2a2a2a',
+              borderRadius: '6px',
+              color: viewMode === 'hub' ? '#a7f3b8' : '#888',
+              fontSize: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            Hub View
+          </button>
+        </div>
+
         {/* Dimension filter dropdown */}
         <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button
@@ -597,8 +711,6 @@ function MapPaneInner({
               onConnect={onConnect}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
               minZoom={0.1}
               maxZoom={3}
               defaultEdgeOptions={{ type: 'rahEdge' }}
@@ -608,15 +720,75 @@ function MapPaneInner({
               <Background color="#1a1a1a" gap={40} size={1} />
               <MiniMap
                 style={{ background: '#0a0a0a', border: '1px solid #1f1f1f', borderRadius: 6 }}
-                maskColor="rgba(0,0,0,0.6)"
-                nodeColor={(n) => {
-                  const data = n.data as RahNodeData | undefined;
-                  return data?.primaryDimensionColor || '#374151';
+                maskColor="rgba(0, 0, 0, 0.7)"
+                nodeColor={(node) => {
+                  const data = node.data as RahNodeData | undefined;
+                  return data?.primaryDimensionColor || '#2a2a2a';
                 }}
                 pannable
                 zoomable
               />
             </ReactFlow>
+
+            {viewMode === 'dimension' && clusterLabels.map((label) => (
+              <div
+                key={label.dimension}
+                style={{
+                  position: 'absolute',
+                  transform: `translate(${label.x}px, ${label.y}px)`,
+                  pointerEvents: 'none',
+                  color: '#7a7a7a',
+                  fontSize: '11px',
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
+                  textShadow: '0 1px 6px rgba(0,0,0,0.45)',
+                }}
+              >
+                {label.dimension}
+              </div>
+            ))}
+
+            <div style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              display: 'flex',
+              gap: 4,
+              zIndex: 10,
+            }}>
+              <button
+                onClick={fitAllNodes}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: 10,
+                  background: '#1a1a1a',
+                  border: '1px solid #2a2a2a',
+                  borderRadius: 4,
+                  color: '#888',
+                  cursor: 'pointer',
+                }}
+                title="Fit all nodes"
+              >
+                Fit
+              </button>
+              {viewMode === 'hub' && (
+                <button
+                  onClick={fitHubNodes}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: 10,
+                    background: '#1a1a1a',
+                    border: '1px solid #2a2a2a',
+                    borderRadius: 4,
+                    color: '#888',
+                    cursor: 'pointer',
+                  }}
+                  title="Fit to hub nodes"
+                >
+                  Hubs
+                </button>
+              )}
+            </div>
 
             {/* Selected node info panel */}
             {selectedDbNode && (

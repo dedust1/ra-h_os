@@ -2,100 +2,73 @@
 
 > How to navigate and use RA-OS's interface.
 
-**How it works:** RA-OS uses a 2-panel layout: browse nodes on the left, work with focused content on the right. Settings give you access to skills, database views, logs, tools, and MCP setup.
+**How it works:** RA-OS uses a collapsible left navigation rail plus a flexible workspace that can show one or two panes at once. Nodes, dimensions, map, table, skills, and settings all live inside the same workspace.
 
 ---
 
-## 2-Panel Layout
+## Workspace Layout
 
 ```
-┌─────────────┬─────────────────────────┐
-│   NODES     │        FOCUS            │
-│   Panel     │        Panel            │
-│             │                         │
-│ • Search    │ • Tabbed workspace      │
-│ • Filters   │ • Node content          │
-│ • Folders   │ • Connections           │
-│             │                         │
-└─────────────┴─────────────────────────┘
+┌────────┬──────────────────────┬──────────────────────┐
+│  NAV   │      PANE A          │      PANE B          │
+│        │                      │                      │
+│ Search │ Nodes / Focus        │ Optional second pane │
+│ Add    │ Dimensions / Map     │ for compare/browse   │
+│ Views  │ Table / Skills       │                      │
+└────────┴──────────────────────┴──────────────────────┘
 ```
 
 ---
 
-## Left Panel: Nodes
+## Left Navigation
 
-Browse and manage your knowledge base.
+The left rail can stay compact or expand into a labeled navigation column.
 
 ### Features
 
-- **Search bar** — Cmd+K opens global search modal
-- **Dimension filters** — Multi-select dimension tags
-- **Node list** — Scrollable list of filtered nodes
-- **Folder view toggle** — Switch between list and folder views
+- **Search** — Cmd+K opens global search
+- **Add Stuff** — open the quick-add flow
+- **Refresh** — reload pane data
+- **Workspace views** — Nodes, Skills, Map, Dimensions, and Table
+- **Settings** — open settings and MCP/config panels
+
+---
+
+## Nodes Pane
+
+Browse and manage your knowledge base in the main feed.
+
+### Features
+
+- **Search bar** — filter nodes by text
+- **Dimension filters** — filter the feed with one or more dimensions
+- **Pending quick-add items** — processing placeholders appear in the feed
+- **Open in other pane** — send a node to the second pane for comparison
 
 ### Node Display
 
 Each node shows:
-- Title + description preview
-- Dimension tags (with custom icons)
+- Title and preview
+- Dimension tags
 - Last updated timestamp
 - Node ID badge
 
-### Folder View
+---
 
-Click the folder icon to open the **Folder View Overlay**:
+## Dimensions Pane
 
-**Two Modes:**
+The dimensions pane is now a dedicated browser instead of a modal-only overlay.
 
-1. **Folders Mode** — Browse by dimension folders
-   - Each dimension shows as a folder card
-   - Drag nodes to folders to add dimensions
-   - Click to view nodes in that dimension
+### Features
 
-2. **Filtered View Mode** — Multi-dimension filtering with views
-   - Add multiple dimension filters
-   - Choose view layout (List, Grid, Kanban)
-   - Save views for quick access
+- Browse dimension cards with counts and lock state
+- Create new dimensions from the pane header
+- Select a dimension to push that filter into the Nodes pane
+- Manage dimension metadata and node grouping from one place
 
 ---
 
-## Filtered View System
-
-### View Modes
-
-| Mode | Description |
-|------|-------------|
-| **List** | Nodes grouped by dimension with section headers |
-| **Grid** | Cards in responsive grid, grouped by dimension |
-| **Kanban** | Columns per dimension, drag to move between |
-
-### Compound Filters (AND Logic)
-
-Add secondary filters to columns:
-
-1. Add a filter (e.g., "inbox")
-2. Click the `[+ AND]` button next to the dimension name
-3. Select secondary dimension (e.g., "research")
-4. Column now shows only nodes with BOTH dimensions
-
-### Saved Views
-
-Save filter + view combinations:
-
-1. Configure your filters and view mode
-2. Click the save icon
-3. Name your view
-4. Access from the "Saved Views" dropdown
-
-### Drag-and-Drop
-
-- **Reorder nodes** within views
-- **Move between Kanban columns** (updates dimensions)
-- **Drag from nodes list** to dimension folders
-
----
-
-## Right Panel: Focus
+## Focus Pane
 
 Active workspace for the node(s) you're working with.
 
@@ -110,7 +83,7 @@ Active workspace for the node(s) you're working with.
 | Section | Content |
 |---------|---------|
 | **Header** | Title, node ID, trash icon |
-| **Content** | Full markdown content with syntax highlighting |
+| **Content** | Full markdown notes with node tokens and links |
 | **Metadata** | Created, updated, type, link |
 | **Dimensions** | Editable dimension tags |
 | **Connections** | Incoming/outgoing edges |
@@ -142,7 +115,7 @@ Global search modal with 4-tier relevance:
 
 ## Settings Panel
 
-**Access:** Settings cog icon (top-right)
+**Access:** Settings item in the left navigation
 
 ### Tabs
 
@@ -163,9 +136,11 @@ Global search modal with 4-tier relevance:
 Visual graph of your knowledge network.
 
 **Features:**
-- Force-directed layout with pan/zoom
+- Dimension View and Hub View modes
+- Saved node positions per view mode
+- Pan/zoom with fit controls and minimap
 - Node size proportional to edge count
-- Top 15 nodes labeled (title + dimensions)
+- Top nodes labeled by title and dimension color
 - Click node to highlight connections
 - Selection shows connected nodes in green
 
@@ -186,6 +161,7 @@ Full table view of all nodes.
 - Filter by dimensions
 - Sort by updated/edges/created
 - Pagination
+- Toolbar lives in the pane header for faster switching
 
 ---
 
@@ -217,6 +193,7 @@ Each dimension can have a custom Lucide icon.
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+K` | Open search |
+| `Cmd+Shift+R` | Refresh all panes |
 | `Escape` | Close modals/overlays |
 
 ---

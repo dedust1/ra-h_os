@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Filter, ChevronDown, X, ArrowUpDown, GripVertical } from 'lucide-react';
 import type { Node } from '@/types/database';
 import { getNodeIcon } from '@/utils/nodeIcons';
@@ -132,9 +133,21 @@ interface ViewsOverlayProps {
   refreshToken?: number;
   pendingNodes?: PendingNode[];
   onDismissPending?: (id: string) => void;
+  externalDimensionFilter?: string | null;
+  onClearExternalDimensionFilter?: () => void;
+  toolbarHost?: HTMLDivElement | null;
 }
 
-export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refreshToken = 0, pendingNodes, onDismissPending }: ViewsOverlayProps) {
+export default function ViewsOverlay({
+  onNodeClick,
+  onNodeOpenInOtherPane,
+  refreshToken = 0,
+  pendingNodes,
+  onDismissPending,
+  externalDimensionFilter = null,
+  onClearExternalDimensionFilter,
+  toolbarHost,
+}: ViewsOverlayProps) {
   const { dimensionIcons } = useDimensionIcons();
 
   // Dimensions for filter picker
@@ -160,10 +173,12 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
   // Derive selectedFilters for backward compatibility (unique dimensions)
-  const selectedFilters = useMemo(() =>
-    [...new Set(columns.map(c => c.dimension))],
-    [columns]
-  );
+  const selectedFilters = useMemo(() => {
+    if (externalDimensionFilter) {
+      return [externalDimensionFilter];
+    }
+    return [...new Set(columns.map(c => c.dimension))];
+  }, [columns, externalDimensionFilter]);
 
   // Sorted dimensions (locked first)
   const sortedDimensions = useMemo(() => {
@@ -293,6 +308,9 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
 
   // Column management
   const addColumn = (dimension: string) => {
+    if (externalDimensionFilter) {
+      return;
+    }
     const newColumn: ColumnFilter = {
       id: `col-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       dimension
@@ -303,6 +321,10 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
   };
 
   const removeFilter = (dimension: string) => {
+    if (externalDimensionFilter && dimension === externalDimensionFilter) {
+      onClearExternalDimensionFilter?.();
+      return;
+    }
     const idx = columns.findIndex(c => c.dimension === dimension);
     if (idx !== -1) {
       setColumns(columns.filter((_, i) => i !== idx));
@@ -310,6 +332,9 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
   };
 
   const clearFilters = () => {
+    if (externalDimensionFilter) {
+      onClearExternalDimensionFilter?.();
+    }
     setColumns([]);
   };
 
@@ -552,24 +577,15 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
     );
   };
 
-  return (
+  const toolbar = (
     <div style={{
+      width: '100%',
       display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      background: 'transparent'
+      alignItems: 'center',
+      gap: '10px',
+      flexWrap: 'wrap'
     }}>
-      {/* Header with filters + sort */}
-      <div style={{
-        padding: '10px 16px',
-        borderBottom: '1px solid #1a1a1a',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        flexWrap: 'wrap'
-      }}>
-        {/* Filter chips + add filter button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', flex: 1 }}>
           {selectedFilters.map(filter => (
             <div
               key={filter}
@@ -605,10 +621,20 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
             </div>
           ))}
 
-          {/* Add filter button */}
+          {externalDimensionFilter && (
+            <span style={{ fontSize: '11px', color: '#666' }}>
+              Sidebar filter
+            </span>
+          )}
+
           <div style={{ position: 'relative' }} ref={filterPickerRef}>
             <button
-              onClick={() => setShowFilterPicker(!showFilterPicker)}
+              onClick={() => {
+                if (!externalDimensionFilter) {
+                  setShowFilterPicker(!showFilterPicker);
+                }
+              }}
+              disabled={!!externalDimensionFilter}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -617,14 +643,16 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
                 background: 'transparent',
                 border: '1px solid #222',
                 borderRadius: '5px',
-                color: '#888',
+                color: externalDimensionFilter ? '#4b4b4b' : '#888',
                 fontSize: '11px',
-                cursor: 'pointer',
+                cursor: externalDimensionFilter ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                e.currentTarget.style.borderColor = '#333';
+                if (!externalDimensionFilter) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  e.currentTarget.style.borderColor = '#333';
+                }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
@@ -636,7 +664,7 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
             </button>
 
             {/* Filter picker dropdown */}
-            {showFilterPicker && (
+            {showFilterPicker && !externalDimensionFilter && (
               <div style={{
                 position: 'absolute',
                 top: '100%',
@@ -816,6 +844,27 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
           )}
         </div>
       </div>
+  );
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      background: 'transparent'
+    }}>
+      {toolbarHost ? createPortal(toolbar, toolbarHost) : (
+        <div style={{
+          padding: '10px 16px',
+          borderBottom: '1px solid #1a1a1a',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          flexWrap: 'wrap'
+        }}>
+          {toolbar}
+        </div>
+      )}
 
       {/* Content area — list view */}
       {filteredNodesLoading ? (

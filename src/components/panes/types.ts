@@ -87,6 +87,8 @@ export interface ViewsPaneProps extends BasePaneProps {
   onNodeClick: (nodeId: number) => void;
   onNodeOpenInOtherPane?: (nodeId: number) => void;
   refreshToken?: number;
+  externalDimensionFilter?: string | null;
+  onClearExternalDimensionFilter?: () => void;
 }
 
 // TablePane specific props
@@ -102,6 +104,7 @@ export interface PaneHeaderProps {
   onSwapPanes?: () => void;
   tabBar?: React.ReactNode;
   children?: React.ReactNode;
+  toolbarHostRef?: (node: HTMLDivElement | null) => void;
 }
 
 // Labels for pane types

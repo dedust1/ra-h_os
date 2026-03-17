@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import PaneHeader from './PaneHeader';
 import ViewsOverlay from '../views/ViewsOverlay';
 import type { BasePaneProps, PaneAction, PaneType } from './types';
@@ -11,6 +12,8 @@ export interface ViewsPaneProps extends BasePaneProps {
   refreshToken?: number;
   pendingNodes?: PendingNode[];
   onDismissPending?: (id: string) => void;
+  externalDimensionFilter?: string | null;
+  onClearExternalDimensionFilter?: () => void;
 }
 
 export default function ViewsPane({
@@ -19,12 +22,16 @@ export default function ViewsPane({
   onPaneAction,
   onCollapse,
   onSwapPanes,
+  tabBar,
   onNodeClick,
   onNodeOpenInOtherPane,
   refreshToken,
   pendingNodes,
   onDismissPending,
+  externalDimensionFilter,
+  onClearExternalDimensionFilter,
 }: ViewsPaneProps) {
+  const [toolbarHost, setToolbarHost] = useState<HTMLDivElement | null>(null);
   const handleTypeChange = (type: PaneType) => {
     onPaneAction?.({ type: 'switch-pane-type', paneType: type });
   };
@@ -37,7 +44,13 @@ export default function ViewsPane({
       background: 'transparent',
       overflow: 'hidden'
     }}>
-      <PaneHeader slot={slot} onCollapse={onCollapse} onSwapPanes={onSwapPanes} />
+      <PaneHeader
+        slot={slot}
+        onCollapse={onCollapse}
+        onSwapPanes={onSwapPanes}
+        tabBar={tabBar}
+        toolbarHostRef={setToolbarHost}
+      />
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <ViewsOverlay
           onNodeClick={onNodeClick}
@@ -45,6 +58,9 @@ export default function ViewsPane({
           refreshToken={refreshToken}
           pendingNodes={pendingNodes}
           onDismissPending={onDismissPending}
+          externalDimensionFilter={externalDimensionFilter}
+          onClearExternalDimensionFilter={onClearExternalDimensionFilter}
+          toolbarHost={toolbarHost}
         />
       </div>
     </div>

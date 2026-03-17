@@ -5,7 +5,8 @@ type RankedChunk = Chunk & { similarity: number };
 
 function sanitizeFtsQuery(input: string): string {
   return input
-    .replace(/['"()*:^~{}[\]]/g, ' ')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
     .trim()
     .split(/\s+/)
     .filter(word => word.length > 0 && !/^(AND|OR|NOT|NEAR)$/i.test(word))

@@ -3,7 +3,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import { scenarios } from './scenarios';
-import { Scenario } from './types';
+import { EvalCategory, Scenario } from './types';
 
 type EvalChatRow = {
   trace_id: string;
@@ -38,7 +38,7 @@ type EvalResult = {
 
 const BASE_URL = process.env.RAH_EVALS_BASE_URL || 'http://localhost:3000';
 const DATASET_ENV = process.env.RAH_EVALS_DATASET_ID;
-const SUITE_ENV = (process.env.RAH_EVALS_SUITE || 'all').toLowerCase();
+const CATEGORY_ENV = (process.env.RAH_EVALS_CATEGORY || process.env.RAH_EVALS_SUITE || 'all').toLowerCase();
 const WAIT_TIMEOUT_MS = Number(process.env.RAH_EVALS_TIMEOUT_MS || 60000);
 const LOG_DB_PATH = path.join(process.cwd(), 'logs', 'evals.sqlite');
 const RAH_DB_PATH = process.env.SQLITE_DB_PATH || path.join(
@@ -54,7 +54,7 @@ function loadDatasetId() {
   return parsed.id || 'default';
 }
 
-type EvalSuite = 'all' | 'tools' | 'skills' | 'traversal' | 'internal' | 'external';
+type EvalCategoryFilter = 'all' | EvalCategory;
 
 type FocusedNodeContext = {
   id: number;
@@ -66,25 +66,25 @@ type FocusedNodeContext = {
   metadata: string | null;
 };
 
-function getDefaultScenarioSuites(scenario: Scenario): string[] {
-  const suites = ['internal'];
-  if (scenario.id.startsWith('skill-trigger-')) {
-    suites.push('skills');
-  } else {
-    suites.push('tools');
+function getDefaultScenarioCategories(scenario: Scenario): EvalCategory[] {
+  if (scenario.id.includes('search') || scenario.id.includes('quote')) {
+    return ['search'];
   }
-  if (scenario.id.includes('traverse')) {
-    suites.push('traversal');
+  if (scenario.id.includes('skill')) {
+    return ['skills'];
   }
-  return suites;
+  if (scenario.id.includes('extract') || scenario.id.includes('ingest')) {
+    return ['ingestion', 'tools'];
+  }
+  return ['database', 'tools'];
 }
 
-function shouldRunScenario(scenario: Scenario, suite: EvalSuite) {
-  if (suite === 'all') return true;
-  const suites = scenario.suites && scenario.suites.length > 0
-    ? scenario.suites
-    : getDefaultScenarioSuites(scenario);
-  return suites.includes(suite);
+function shouldRunScenario(scenario: Scenario, category: EvalCategoryFilter) {
+  if (category === 'all') return true;
+  const categories = scenario.categories && scenario.categories.length > 0
+    ? scenario.categories
+    : getDefaultScenarioCategories(scenario);
+  return categories.includes(category);
 }
 
 function resolveFocusedNodeId(query: Scenario['input']['focusedNodeQuery']): number | null {
@@ -424,14 +424,14 @@ async function runScenario(scenario: Scenario, datasetId: string): Promise<EvalR
 }
 
 async function runAll() {
-  const suite: EvalSuite = ['skills', 'tools', 'traversal', 'internal', 'external'].includes(SUITE_ENV)
-    ? (SUITE_ENV as EvalSuite)
+  const category: EvalCategoryFilter = ['database', 'tools', 'skills', 'search', 'ingestion'].includes(CATEGORY_ENV)
+    ? (CATEGORY_ENV as EvalCategoryFilter)
     : 'all';
   const datasetId = loadDatasetId();
   await ensureServerReady();
   await ensureEvalsEnabled();
-  const runnable = scenarios.filter(s => s.enabled !== false && shouldRunScenario(s, suite));
-  console.log(`Running ${runnable.length} scenarios (dataset: ${datasetId}, suite: ${suite})...\n`);
+  const runnable = scenarios.filter(s => s.enabled !== false && shouldRunScenario(s, category));
+  console.log(`Running ${runnable.length} scenarios (dataset: ${datasetId}, category: ${category})...\n`);
 
   const results: EvalResult[] = [];
   for (const scenario of runnable) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import FolderViewOverlay from '@/components/nodes/FolderViewOverlay';
 import PaneHeader from './PaneHeader';
 import { DimensionsPaneProps, PaneType } from './types';
@@ -10,11 +11,13 @@ export default function DimensionsPane({
   onPaneAction,
   onCollapse,
   onSwapPanes,
+  tabBar,
   onNodeOpen,
   refreshToken,
   onDataChanged,
   onDimensionSelect,
 }: DimensionsPaneProps) {
+  const [toolbarHost, setToolbarHost] = useState<HTMLDivElement | null>(null);
   const handleTypeChange = (type: PaneType) => {
     onPaneAction?.({ type: 'switch-pane-type', paneType: type });
   };
@@ -32,7 +35,13 @@ export default function DimensionsPane({
       background: 'transparent',
       overflow: 'hidden',
     }}>
-      <PaneHeader slot={slot} onCollapse={onCollapse} onSwapPanes={onSwapPanes} />
+      <PaneHeader
+        slot={slot}
+        onCollapse={onCollapse}
+        onSwapPanes={onSwapPanes}
+        tabBar={tabBar}
+        toolbarHostRef={setToolbarHost}
+      />
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {/* FolderViewOverlay expects to be an overlay, so we wrap it in a container */}
@@ -47,6 +56,7 @@ export default function DimensionsPane({
             refreshToken={refreshToken}
             onDataChanged={onDataChanged}
             onDimensionSelect={onDimensionSelect}
+            toolbarHost={toolbarHost}
           />
         </div>
       </div>
