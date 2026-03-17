@@ -1,5 +1,6 @@
 import './globals.css';
 import { DimensionIconsProvider } from '@/context/DimensionIconsContext';
+import ExternalNavigationManager from '@/components/system/ExternalNavigationManager';
 
 export const metadata = {
   title: 'RA-H Open Source',
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <DimensionIconsProvider>
+          <ExternalNavigationManager />
           {children}
         </DimensionIconsProvider>
       </body>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { Folder, Link as LinkIcon } from 'lucide-react';
 import { Node } from '@/types/database';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 
 interface NodeWithMetrics extends Node {
   edge_count?: number;
@@ -440,7 +441,12 @@ export default function DatabaseViewer() {
                         {node.title || 'Untitled node'}
                         {node.link && (
                           <button
-                            onClick={() => window.open(node.link, '_blank')}
+                            onClick={() => {
+                              void openExternalUrl(node.link!).catch((error) => {
+                                console.error('[DatabaseViewer] Failed to open node link', error);
+                                window.alert(`Unable to open ${node.link}`);
+                              });
+                            }}
                             title="Open original link"
                             style={{
                               background: 'transparent',

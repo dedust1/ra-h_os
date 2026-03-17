@@ -9,6 +9,7 @@ import { parseNodeMarkers } from '@/tools/infrastructure/nodeFormatter';
 import { Node, NodeConnection, Chunk } from '@/types/database';
 import DimensionTags from './dimensions/DimensionTags';
 import { getNodeIcon } from '@/utils/nodeIcons';
+import { openExternalUrl, shouldOpenExternally } from '@/utils/openExternalUrl';
 import { useDimensionIcons } from '@/context/DimensionIconsContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import { SourceReader } from './source';
@@ -1811,13 +1812,23 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 ) : nodesData[activeTab].link ? (
                   <a
                     href={nodesData[activeTab].link}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     onClick={(e) => {
                       if (e.metaKey || e.ctrlKey) {
                         e.preventDefault();
                         startEdit('link', nodesData[activeTab].link || '');
+                        return;
                       }
+
+                      const link = nodesData[activeTab].link;
+                      if (!link || !shouldOpenExternally(link)) {
+                        return;
+                      }
+
+                      e.preventDefault();
+                      void openExternalUrl(link).catch((error) => {
+                        console.error('[FocusPanel] Failed to open node link', error);
+                        window.alert(`Unable to open ${link}`);
+                      });
                     }}
                     style={{
                       color: '#3b82f6',
@@ -1993,9 +2004,26 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 title="Connections"
               >
                 <Link size={12} />
-                {activeTab && edgesData[activeTab] && edgesData[activeTab].length > 0 && (
+                <span>Edges</span>
+                {activeTab && (
                   <span style={{ fontWeight: 600 }}>
-                    {edgesData[activeTab].length}
+                    <span
+                      style={{
+                        minWidth: '18px',
+                        height: '18px',
+                        borderRadius: '999px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 6px',
+                        background: activeContentTab === 'edges' ? 'rgba(34, 197, 94, 0.18)' : '#1a1a1a',
+                        color: activeContentTab === 'edges' ? '#a7f3b8' : '#888',
+                        fontSize: '10px',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {(edgesData[activeTab] || []).length}
+                    </span>
                   </span>
                 )}
               </button>

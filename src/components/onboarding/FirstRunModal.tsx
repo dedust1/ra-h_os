@@ -3,6 +3,7 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { isFirstRun, markFirstRunComplete } from '@/services/storage/apiKeys';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 
 export default function FirstRunModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -46,14 +47,18 @@ export default function FirstRunModal() {
           <div style={noteStyle}>
             <p>Without a key, you can still create and organise nodes manually.</p>
             <p style={{ marginTop: 8 }}>
-              <a
-                href="https://platform.openai.com/api-keys"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  void openExternalUrl('https://platform.openai.com/api-keys').catch((error) => {
+                    console.error('[FirstRunModal] Failed to open OpenAI API keys page', error);
+                    window.alert('Unable to open the OpenAI API keys page automatically.');
+                  });
+                }}
                 style={linkStyle}
               >
                 Get an API key from OpenAI →
-              </a>
+              </button>
             </p>
           </div>
         </div>
@@ -148,4 +153,9 @@ const noteStyle: CSSProperties = {
 const linkStyle: CSSProperties = {
   color: '#22c55e',
   textDecoration: 'none',
+  background: 'transparent',
+  border: 'none',
+  padding: 0,
+  cursor: 'pointer',
+  font: 'inherit',
 };

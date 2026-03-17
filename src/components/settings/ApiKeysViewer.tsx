@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, type CSSProperties } from 'react';
+import { openExternalUrl } from '@/utils/openExternalUrl';
 
 export default function ApiKeysViewer() {
   const [status, setStatus] = useState<'checking' | 'configured' | 'not-set'>('checking');
@@ -59,14 +60,18 @@ export default function ApiKeysViewer() {
 
       {/* Get key link */}
       <div style={helpStyle}>
-        <a
-          href="https://platform.openai.com/api-keys"
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={() => {
+            void openExternalUrl('https://platform.openai.com/api-keys').catch((error) => {
+              console.error('[ApiKeysViewer] Failed to open OpenAI API keys page', error);
+              window.alert('Unable to open the OpenAI API keys page automatically.');
+            });
+          }}
           style={linkStyle}
         >
           Get your API key from OpenAI →
-        </a>
+        </button>
       </div>
     </div>
   );
@@ -163,4 +168,9 @@ const helpStyle: CSSProperties = {
 const linkStyle: CSSProperties = {
   color: '#22c55e',
   textDecoration: 'none',
+  background: 'transparent',
+  border: 'none',
+  padding: 0,
+  cursor: 'pointer',
+  font: 'inherit',
 };
