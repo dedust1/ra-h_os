@@ -75,10 +75,9 @@ export async function PUT(
     if (typeof body.description === 'string') {
       const descriptionError = validateExplicitDescription(body.description);
       if (descriptionError) {
-        return NextResponse.json({
-          success: false,
-          error: descriptionError
-        }, { status: 400 });
+        console.warn(
+          `[DescriptionQuality] User-updated description failed validation for node ${nodeId}: ${descriptionError}`
+        );
       }
     }
 

@@ -5,20 +5,100 @@ import { generateText } from 'ai';
 import { extractWebsite } from '@/services/typescript/extractors/website';
 import { formatNodeForChat } from '../infrastructure/nodeFormatter';
 
-// AI-powered content analysis
-async function analyzeContentWithAI(title: string, description: string, contentType: string) {
+interface ExistingDimension {
+  name: string;
+  description: string | null;
+}
+
+function inferWebsiteContentType(url: string): 'website' | 'tweet' {
   try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return hostname === 'x.com' || hostname.endsWith('.x.com') || hostname === 'twitter.com' || hostname.endsWith('.twitter.com')
+      ? 'tweet'
+      : 'website';
+  } catch {
+    return 'website';
+  }
+}
+
+async function fetchExistingDimensions(): Promise<ExistingDimension[]> {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/dimensions/popular`);
+    if (!response.ok) return [];
+
+    const result = await response.json();
+    if (!Array.isArray(result.data)) return [];
+
+    return result.data
+      .map((dimension: { dimension?: unknown; description?: unknown }) => ({
+        name: typeof dimension.dimension === 'string' ? dimension.dimension.trim() : '',
+        description: typeof dimension.description === 'string' ? dimension.description.trim() : null
+      }))
+      .filter((dimension: ExistingDimension) => dimension.name.length > 0);
+  } catch (error) {
+    console.warn('Website dimension fetch fallback (no dimension context):', error);
+    return [];
+  }
+}
+
+function selectExistingDimensions(
+  selected: unknown,
+  existingDimensions: ExistingDimension[],
+  max = 5
+): string[] {
+  if (!Array.isArray(selected) || existingDimensions.length === 0) return [];
+
+  const byLowerName = new Map(existingDimensions.map((dimension) => [dimension.name.toLowerCase(), dimension.name]));
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of selected) {
+    if (typeof value !== 'string') continue;
+    const matched = byLowerName.get(value.trim().toLowerCase());
+    if (!matched) continue;
+    const key = matched.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(matched);
+    if (normalized.length >= max) break;
+  }
+
+  return normalized;
+}
+
+// AI-powered content analysis
+async function analyzeContentWithAI(
+  title: string,
+  description: string,
+  contentType: string,
+  existingDimensions: ExistingDimension[]
+) {
+  try {
+    const availableDimensionsBlock = existingDimensions.length > 0
+      ? existingDimensions
+          .map((dimension) => `- ${dimension.name}${dimension.description ? `: ${dimension.description}` : ''}`)
+          .join('\n')
+      : '- No existing dimensions available. Return an empty dimensions array.';
     const prompt = `Analyze this ${contentType} content and provide classification.
 
 Title: "${title}"
 Description: "${description}"
 
 CRITICAL — nodeDescription rules (max 280 chars):
-1. Say WHAT this literally is: "Blog post by…", "Article from…", "Essay arguing…", "Tutorial on…", "Thread by…"
+1. Say WHAT this literally is using explicit entity words only: "Blog post by…", "Article from…", "Essay arguing…", "Tutorial on…", "Thread by…", "Tweet by…", "Post by…"
 2. Name the author/site if known from the metadata.
 3. State the actual claim or thesis — don't paraphrase into vague abstractions.
 4. End with why it's interesting or important — one concrete phrase.
 5. ABSOLUTELY FORBIDDEN: "discusses", "explores", "examines", "talks about", "delves into", "emphasizing the need for". State things directly.
+
+DIMENSION SELECTION (critical):
+You must select 0-3 dimensions from the list below.
+Do NOT invent new dimension names.
+Pick only dimensions that genuinely fit this content.
+If nothing fits, return an empty array.
+
+Available dimensions:
+${availableDimensionsBlock}
 
 Examples:
 - Title: "Software is eating the world — again" / Author: Andrej Karpathy
@@ -33,7 +113,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
 {
   "enhancedDescription": "A comprehensive summary (3-6 paragraphs, 800-1500 chars). Cover key points, arguments, takeaways.",
   "nodeDescription": "<your 280-char description following the rules above>",
-  "tags": ["relevant", "semantic", "tags"],
+  "dimensions": ["existing-dimension-1", "existing-dimension-2"],
   "reasoning": "Brief explanation of classification choices"
 }`;
 
@@ -53,7 +133,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
     return {
       enhancedDescription: result.enhancedDescription || description,
       nodeDescription: typeof result.nodeDescription === 'string' ? result.nodeDescription.slice(0, 280) : undefined,
-      tags: Array.isArray(result.tags) ? result.tags : [],
+      dimensions: selectExistingDimensions(result.dimensions, existingDimensions, 5),
       reasoning: result.reasoning || 'AI analysis completed'
     };
   } catch (error) {
@@ -62,7 +142,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
     return {
       enhancedDescription: description,
       nodeDescription: undefined,
-      tags: [],
+      dimensions: [],
       reasoning: 'Fallback description used'
     };
   }
@@ -122,10 +202,13 @@ export const websiteExtractTool = tool({
       console.log('🎯 Website extraction successful, analyzing with AI...');
 
       // Step 2: AI Analysis for enhanced metadata
+      const existingDimensions = await fetchExistingDimensions();
+      const contentType = inferWebsiteContentType(url);
       const aiAnalysis = await analyzeContentWithAI(
         result.metadata?.title || `Website: ${new URL(url).hostname}`, 
         result.notes?.substring(0, 2000) || 'Website content', 
-        'website'
+        contentType,
+        existingDimensions
       );
 
       // Step 3: Create node with extracted content and AI analysis
@@ -138,6 +221,9 @@ export const websiteExtractTool = tool({
         .filter(Boolean);
 
       trimmedDimensions = trimmedDimensions.slice(0, 5);
+      const finalDimensions = trimmedDimensions.length > 0
+        ? trimmedDimensions
+        : (aiAnalysis?.dimensions || []).slice(0, 5);
 
       const createResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/nodes`, {
         method: 'POST',
@@ -147,10 +233,11 @@ export const websiteExtractTool = tool({
           description: aiAnalysis?.nodeDescription,
           notes: enhancedDescription,
           link: url,
-          dimensions: trimmedDimensions,
+          event_date: result.metadata?.published_date || result.metadata?.date || null,
+          dimensions: finalDimensions,
           chunk: result.chunk || result.notes,
           metadata: {
-            source: 'website',
+            source: contentType,
             hostname: new URL(url).hostname,
             author: result.metadata?.author,
             published_date: result.metadata?.published_date || result.metadata?.date,
@@ -176,7 +263,7 @@ export const websiteExtractTool = tool({
       console.log('🎯 WebsiteExtract completed successfully');
 
       // Use actual assigned dimensions from API response (includes auto-assigned locked + keywords)
-      const actualDimensions: string[] = createResult.data?.dimensions || trimmedDimensions || [];
+      const actualDimensions: string[] = createResult.data?.dimensions || finalDimensions || [];
       const formattedNode = createResult.data?.id
         ? formatNodeForChat({ id: createResult.data.id, title: nodeTitle, dimensions: actualDimensions })
         : nodeTitle;

@@ -70,6 +70,7 @@ function initDatabase() {
         source TEXT,
         created_at TEXT,
         context TEXT,
+        explanation TEXT,
         FOREIGN KEY (from_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
         FOREIGN KEY (to_node_id) REFERENCES nodes(id) ON DELETE CASCADE
       );
@@ -111,6 +112,18 @@ function initDatabase() {
   db.pragma('synchronous = NORMAL');
   db.pragma('cache_size = 5000');
   db.pragma('busy_timeout = 5000');
+
+  const edgeCols = db.prepare('PRAGMA table_info(edges)').all().map(c => c.name);
+  if (!edgeCols.includes('explanation')) {
+    db.exec('ALTER TABLE edges ADD COLUMN explanation TEXT;');
+    try {
+      db.exec(`
+        UPDATE edges SET explanation = json_extract(context, '$.explanation')
+        WHERE explanation IS NULL AND json_extract(context, '$.explanation') IS NOT NULL;
+      `);
+    } catch {}
+    console.error('[RA-H] Migrated edges: added explanation column');
+  }
 
   return db;
 }

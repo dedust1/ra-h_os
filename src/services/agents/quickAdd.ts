@@ -6,7 +6,7 @@ import { formatNodeForChat } from '@/tools/infrastructure/nodeFormatter';
 import { summarizeTranscript } from './transcriptSummarizer';
 import { eventBroadcaster } from '@/services/events';
 
-export type QuickAddMode = 'link' | 'note' | 'chat';
+export type QuickAddMode = 'link' | 'text';
 
 export type QuickAddInputType = 'youtube' | 'website' | 'pdf' | 'note' | 'chat';
 
@@ -14,6 +14,15 @@ export interface QuickAddInput {
   rawInput: string;
   mode?: QuickAddMode;
   description?: string;
+}
+
+export interface QuickAddResult {
+  id: string;
+  task: string;
+  inputType: QuickAddInputType;
+  status: 'queued' | 'completed' | 'failed';
+  summary?: string;
+  error?: string;
 }
 
 function isLikelyChatTranscript(raw: string): boolean {
@@ -25,13 +34,23 @@ function isLikelyChatTranscript(raw: string): boolean {
 }
 
 export function detectInputType(raw: string, mode?: QuickAddMode): QuickAddInputType {
-  if (mode === 'chat') return 'chat';
-  if (mode === 'note') return 'note';
-
   const input = raw.trim();
-  if (/youtu(\.be|be\.com)/i.test(input)) return 'youtube';
-  if (/\.pdf($|\?)/i.test(input) || /arxiv\.org\//i.test(input)) return 'pdf';
-  if (/^https?:\/\//i.test(input)) return 'website';
+  const isSingleLine = !input.includes('\n');
+
+  if (mode === 'text') {
+    return isLikelyChatTranscript(input) ? 'chat' : 'note';
+  }
+
+  if (isSingleLine) {
+    if (/youtu(\.be|be\.com)/i.test(input)) return 'youtube';
+    if (/\.pdf($|\?)/i.test(input) || /arxiv\.org\//i.test(input)) return 'pdf';
+    if (/^https?:\/\//i.test(input)) return 'website';
+  }
+
+  if (mode === 'link') {
+    return 'website';
+  }
+
   if (!mode && isLikelyChatTranscript(input)) return 'chat';
   return 'note';
 }
@@ -82,6 +101,30 @@ interface CreateNodeResponse {
   success?: boolean;
   data?: { id?: number; title?: string } | null;
   error?: string;
+}
+
+function deriveFallbackLinkTitle(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return 'Saved link';
+
+  try {
+    const parsed = new URL(trimmed);
+    const hostname = parsed.hostname.replace(/^www\./, '');
+    const lastSegment = parsed.pathname
+      .split('/')
+      .filter(Boolean)
+      .pop()
+      ?.replace(/[-_]+/g, ' ')
+      .trim();
+
+    if (lastSegment) {
+      return `${hostname}: ${lastSegment}`.slice(0, 160);
+    }
+
+    return hostname.slice(0, 160);
+  } catch {
+    return trimmed.slice(0, 160);
+  }
 }
 
 function buildStructuredSummary({ task, action, resultMessage, nodeReference }: SummaryParts): string {
@@ -160,32 +203,84 @@ async function handleExtractionQuickAdd(type: ExtractionQuickAddType, url: strin
   if (!execute) {
     throw new Error(`Tool ${toolName} does not have an execute function`);
   }
-  const rawResult = await execute({ url }, { toolCallId: 'quickadd-extract', messages: [] });
 
-  if (!isExtractionToolResult(rawResult)) {
-    throw new Error(`Unexpected response from ${toolName}`);
+  try {
+    const rawResult = await execute({ url }, { toolCallId: 'quickadd-extract', messages: [] });
+
+    if (!isExtractionToolResult(rawResult)) {
+      throw new Error(`Unexpected response from ${toolName}`);
+    }
+
+    const toolResult = rawResult;
+
+    if (!toolResult || toolResult.success === false) {
+      const errorMessage = toolResult?.error || `Failed to execute ${toolName}`;
+      throw new Error(errorMessage);
+    }
+
+    const summaryLine = summarizeToolExecution(toolName, { url }, toolResult);
+    const nodeId = toolResult.data?.nodeId;
+    const nodeTitle = typeof toolResult.data?.title === 'string' && toolResult.data.title.trim().length > 0
+      ? toolResult.data.title.trim()
+      : nodeId ? `Node ${nodeId}` : 'Created node';
+    const nodeReference = nodeId ? formatNodeForChat({ id: nodeId, title: nodeTitle }) : 'None';
+
+    return buildStructuredSummary({
+      task,
+      action: toolName,
+      resultMessage: summaryLine,
+      nodeReference,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Failed to execute ${toolName}`;
+    const title = deriveFallbackLinkTitle(url);
+    const description =
+      `Link record for this source. RA-H could not correctly process the URL during ingestion because ${message}. Stored so the source is not lost and can be revisited later.`;
+    const notes = [
+      `Original URL: ${url}`,
+      `Ingestion failure: ${message}`,
+      `Attempted pipeline: ${type}`,
+    ].join('\n');
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description,
+        notes,
+        link: url,
+        metadata: {
+          source: 'quick-add-link-fallback',
+          attempted_pipeline: type,
+          extraction_failed: true,
+          extraction_error: message,
+          refined_at: new Date().toISOString(),
+        },
+      }),
+    });
+
+    const rawFallbackResult = await response.json();
+    if (!isCreateNodeResponse(rawFallbackResult)) {
+      throw new Error(message);
+    }
+    if (!response.ok) {
+      throw new Error(rawFallbackResult.error || message);
+    }
+
+    const nodeId = rawFallbackResult.data?.id;
+    const nodeReference = nodeId ? formatNodeForChat({ id: nodeId, title }) : 'None';
+    const resultMessage = nodeId
+      ? `Link ingestion failed, so RA-H saved a fallback node ${nodeReference}. Reason: ${message}`
+      : `Link ingestion failed, so RA-H saved a fallback node. Reason: ${message}`;
+
+    return buildStructuredSummary({
+      task,
+      action: `${toolName} (fallback)`,
+      resultMessage,
+      nodeReference,
+    });
   }
-
-  const toolResult = rawResult;
-
-  if (!toolResult || toolResult.success === false) {
-    const errorMessage = toolResult?.error || `Failed to execute ${toolName}`;
-    throw new Error(errorMessage);
-  }
-
-  const summaryLine = summarizeToolExecution(toolName, { url }, toolResult);
-  const nodeId = toolResult.data?.nodeId;
-  const nodeTitle = typeof toolResult.data?.title === 'string' && toolResult.data.title.trim().length > 0
-    ? toolResult.data.title.trim()
-    : nodeId ? `Node ${nodeId}` : 'Created node';
-  const nodeReference = nodeId ? formatNodeForChat({ id: nodeId, title: nodeTitle }) : 'None';
-
-  return buildStructuredSummary({
-    task,
-    action: toolName,
-    resultMessage: summaryLine,
-    nodeReference,
-  });
 }
 
 async function handleNoteQuickAdd(rawInput: string, task: string, userDescription?: string): Promise<string> {
@@ -204,7 +299,6 @@ async function handleNoteQuickAdd(rawInput: string, task: string, userDescriptio
     },
   };
 
-  // If user provided a description, use it instead of auto-generating
   if (userDescription && userDescription.trim()) {
     nodePayload.description = userDescription.trim();
   }
@@ -330,15 +424,6 @@ async function handleChatTranscriptQuickAdd(rawInput: string, task: string): Pro
   });
 }
 
-export interface QuickAddResult {
-  id: string;
-  task: string;
-  inputType: QuickAddInputType;
-  status: 'queued' | 'completed' | 'failed';
-  summary?: string;
-  error?: string;
-}
-
 export async function enqueueQuickAdd({ rawInput, mode, description }: QuickAddInput): Promise<QuickAddResult> {
   const inputType = detectInputType(rawInput, mode);
   const task = buildTaskPrompt(inputType, rawInput);
@@ -351,25 +436,21 @@ export async function enqueueQuickAdd({ rawInput, mode, description }: QuickAddI
     status: 'queued',
   };
 
-  // Run async - fire and forget
   setImmediate(async () => {
     try {
-      let summary: string;
       if (inputType === 'note') {
-        summary = await handleNoteQuickAdd(rawInput, task, description);
+        await handleNoteQuickAdd(rawInput, task, description);
       } else if (inputType === 'chat') {
-        summary = await handleChatTranscriptQuickAdd(rawInput, task);
+        await handleChatTranscriptQuickAdd(rawInput, task);
       } else {
-        summary = await handleExtractionQuickAdd(inputType as ExtractionQuickAddType, rawInput, task);
+        await handleExtractionQuickAdd(inputType as ExtractionQuickAddType, rawInput, task);
       }
 
       console.log(`[QuickAdd] Completed: ${task}`);
-      // Broadcast completion so ThreePanelLayout can remove the pending placeholder
       eventBroadcaster.broadcast({
         type: 'QUICK_ADD_COMPLETED',
         data: { quickAddId: id, source: 'quick-add' }
       });
-      // Also broadcast NODE_CREATED to refresh the feed
       eventBroadcaster.broadcast({
         type: 'NODE_CREATED',
         data: { node: { title: task }, source: 'quick-add' }

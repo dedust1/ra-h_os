@@ -657,6 +657,15 @@ class SQLiteClient {
         if (edgeCols.some(c => c.name === 'user_feedback')) {
           try { this.db.exec('ALTER TABLE edges DROP COLUMN user_feedback;'); } catch {}
         }
+        if (!edgeCols.some(c => c.name === 'explanation')) {
+          this.db.exec('ALTER TABLE edges ADD COLUMN explanation TEXT;');
+          try {
+            this.db.exec(`
+              UPDATE edges SET explanation = json_extract(context, '$.explanation')
+              WHERE explanation IS NULL AND json_extract(context, '$.explanation') IS NOT NULL;
+            `);
+          } catch {}
+        }
 
         // Recreate nodes_fts to index title + description + notes
         try {
