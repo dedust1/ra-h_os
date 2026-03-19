@@ -1,5 +1,5 @@
 const WEAK_DESCRIPTION_PATTERNS = /\b(discusses|explores|examines|talks about|is about|delves into)\b/i;
-const EXPLICIT_ENTITY_PATTERNS = /\b(article|artifact|book|brief|claim|company|conversation|dataset|decision|dimension|document|episode|essay|guide|idea|insight|interview|node|note|paper|person|plan|placeholder|podcast|presentation|project|question|record|research|skill|source|summary|talk|target|test node|thread|tool|transcript|tweet|video|website|workflow)\b/i;
+const EXPLICIT_ENTITY_PATTERNS = /\b(article|artifact|book|brief|claim|company|concept|conversation|dataset|decision|dimension|document|episode|essay|event|guide|idea|insight|interview|lesson|link|node|note|paper|person|plan|placeholder|podcast|post|presentation|project|question|record|research|resource|skill|source|status|summary|talk|target|test node|thread|tool|transcript|tweet|update|video|website|workflow)\b/i;
 const UNCERTAINTY_PATTERNS = /\b(likely|probably|possibly|appears to be|seems to be|unclear|uncertain)\b/i;
 const GENERIC_EDGE_PATTERNS = /^(related|related to|connected|connected to|association|associated with)$/i;
 

@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
     body.title = sanitizeTitle(body.title);
 
     const rawNotes = typeof body.notes === 'string' ? body.notes : null;
+    const rawChunk = typeof body.chunk === 'string' ? body.chunk : null;
     const eventDate = typeof body.event_date === 'string' ? body.event_date : null;
 
     // Process provided dimensions first (needed for description generation)
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
       try {
         nodeDescription = await generateDescription({
           title: body.title,
-          notes: rawNotes || undefined,
+          notes: rawNotes || rawChunk?.slice(0, 2000) || undefined,
           link: body.link || undefined,
           metadata: body.metadata,
           dimensions: trimmedProvidedDimensions
@@ -122,14 +123,22 @@ export async function POST(request: NextRequest) {
       nodeDescription = body.title.slice(0, 280);
     }
 
-    const finalDescription = nodeDescription ?? body.title.slice(0, 280);
+    let finalDescription = nodeDescription ?? body.title.slice(0, 280);
 
     const descriptionError = validateExplicitDescription(finalDescription);
     if (descriptionError) {
-      return NextResponse.json({
-        success: false,
-        error: descriptionError
-      }, { status: 400 });
+      const isUserSuppliedDescription = typeof body.description === 'string' && body.description.trim().length > 0;
+      if (isUserSuppliedDescription) {
+        return NextResponse.json({
+          success: false,
+          error: descriptionError
+        }, { status: 400 });
+      }
+
+      console.warn(
+        `[DescriptionQuality] Auto-generated description failed validation for "${body.title}": ${descriptionError}. Falling back to title.`
+      );
+      finalDescription = body.title.slice(0, 280);
     }
 
     // Monitor description quality
@@ -139,7 +148,6 @@ export async function POST(request: NextRequest) {
 
     // Use only provided dimensions (no auto-assignment)
     const finalDimensions = trimmedProvidedDimensions;
-    const rawChunk = typeof body.chunk === 'string' ? body.chunk : null;
     let chunkToStore = rawChunk;
     let chunkStatus: Node['chunk_status'];
 

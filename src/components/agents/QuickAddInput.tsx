@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 interface QuickAddSubmitPayload {
   input: string;
-  mode: 'link' | 'note' | 'chat';
+  mode: 'link' | 'text';
   description?: string;
 }
 
@@ -15,34 +15,28 @@ interface QuickAddInputProps {
   onClose?: () => void;
 }
 
-type DetectedType = 'youtube' | 'website' | 'pdf-url' | 'note' | 'chat';
+type SourceType = 'link' | 'text' | 'upload';
 
-function detectType(raw: string): DetectedType {
+function detectSourceType(raw: string): Exclude<SourceType, 'upload'> {
   const trimmed = raw.trim();
-  if (!trimmed) return 'note';
-  if (/youtu(\.be|be\.com)/i.test(trimmed)) return 'youtube';
-  if (/\.pdf($|\?)/i.test(trimmed) || /arxiv\.org\//i.test(trimmed)) return 'pdf-url';
-  if (/^https?:\/\//i.test(trimmed)) return 'website';
-  const newlines = (trimmed.match(/\n/g)?.length ?? 0);
-  if (newlines >= 3 && trimmed.length > 300) return 'chat';
-  if (/You said:|ChatGPT said:|Claude said:/i.test(trimmed)) return 'chat';
-  return 'note';
+  if (!trimmed) return 'text';
+  const isSingleLine = !trimmed.includes('\n');
+  if (isSingleLine) {
+    if (/^https?:\/\//i.test(trimmed)) return 'link';
+  }
+  return 'text';
 }
 
-const TYPE_LABELS: Record<DetectedType, string> = {
-  youtube: 'YouTube',
-  website: 'Link',
-  'pdf-url': 'PDF',
-  note: 'Note',
-  chat: 'Transcript',
+const SOURCE_LABELS: Record<SourceType, string> = {
+  link: 'Link',
+  text: 'Text',
+  upload: 'Upload',
 };
 
-const TYPE_COLORS: Record<DetectedType, string> = {
-  youtube: '#ef4444',
-  website: '#3b82f6',
-  'pdf-url': '#f59e0b',
-  note: '#22c55e',
-  chat: '#a78bfa',
+const SOURCE_COLORS: Record<SourceType, string> = {
+  link: '#3b82f6',
+  text: '#22c55e',
+  upload: '#f59e0b',
 };
 
 export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInputProps) {
@@ -52,6 +46,8 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
   const [dragOver, setDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [sourceOverride, setSourceOverride] = useState<Exclude<SourceType, 'upload'> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isControlled = isOpen !== undefined;
   const isExpanded = isControlled ? isOpen : isExpandedInternal;
@@ -59,8 +55,8 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
     ? (value: boolean) => { if (!value && onClose) onClose(); }
     : setIsExpandedInternal;
 
-  const detectedType = useMemo(() => detectType(input), [input]);
-  const showTypePill = input.trim().length > 0 && !uploadedFile;
+  const detectedSource = useMemo(() => detectSourceType(input), [input]);
+  const effectiveSource: SourceType = uploadedFile ? 'upload' : (sourceOverride ?? detectedSource);
 
   const handleFileUpload = useCallback(async (file: File) => {
     setIsPosting(true);
@@ -78,6 +74,7 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
       }
       setUploadedFile(null);
       setInput('');
+      setSourceOverride(null);
       setIsExpanded(false);
     } catch (error) {
       console.error('[QuickAddInput] Upload error:', error);
@@ -95,8 +92,12 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
     if (!input.trim() || isPosting) return;
     setIsPosting(true);
     try {
-      await onSubmit({ input: input.trim(), mode: 'link' });
+      await onSubmit({
+        input: input.trim(),
+        mode: effectiveSource === 'link' ? 'link' : 'text',
+      });
       setInput('');
+      setSourceOverride(null);
       setIsExpanded(false);
     } catch (error) {
       console.error('[QuickAddInput] Submit error:', error);
@@ -115,6 +116,7 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
       setInput('');
       setUploadedFile(null);
       setUploadError(null);
+      setSourceOverride(null);
     }
   };
 
@@ -147,6 +149,7 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
     }
     setUploadedFile(file);
     setInput('');
+    setSourceOverride(null);
   }, []);
 
   const hasContent = input.trim() || uploadedFile;
@@ -156,6 +159,37 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
     setInput('');
     setUploadedFile(null);
     setUploadError(null);
+    setSourceOverride(null);
+  };
+
+  const handleSourceSelect = (source: Exclude<SourceType, 'upload'>) => {
+    setSourceOverride(source);
+    setUploadedFile(null);
+    setUploadError(null);
+  };
+
+  const handleUploadClick = () => {
+    setUploadError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setUploadError('Only PDF files are supported');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      setUploadError(`File too large (${Math.round(file.size / 1024 / 1024)}MB). Max 50MB.`);
+      event.target.value = '';
+      return;
+    }
+    setUploadedFile(file);
+    setInput('');
+    setSourceOverride(null);
+    event.target.value = '';
   };
 
   if (!isExpanded) {
@@ -210,7 +244,14 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
       onDrop={handleDrop}
       onClick={(e) => e.stopPropagation()}
     >
-      {/* File preview */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        style={{ display: 'none' }}
+        onChange={handleFileInputChange}
+      />
+
       {uploadedFile && (
         <div className="qa-file-row">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5">
@@ -231,12 +272,10 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
         </div>
       )}
 
-      {/* Error */}
       {uploadError && (
         <div className="qa-error">{uploadError}</div>
       )}
 
-      {/* Input area */}
       {!uploadedFile && (
         <div className={`qa-input-area ${dragOver ? 'dragging' : ''}`}>
           {dragOver && (
@@ -250,9 +289,18 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
           )}
           <textarea
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setInput(nextValue);
+              if (nextValue.trim()) {
+                setUploadedFile(null);
+              }
+              if (!nextValue.trim()) {
+                setSourceOverride(null);
+              }
+            }}
             onKeyDown={handleKeyDown}
-            placeholder="Paste a URL, write a note, or drop a PDF..."
+            placeholder="Paste a link, write/paste text, or upload a PDF..."
             disabled={isPosting}
             autoFocus
             className="qa-textarea"
@@ -261,18 +309,40 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
         </div>
       )}
 
-      {/* Footer */}
       <div className="qa-footer">
         <div className="qa-footer-left">
-          {showTypePill && (
-            <span className="qa-type-pill" style={{
-              color: TYPE_COLORS[detectedType],
-              borderColor: TYPE_COLORS[detectedType] + '30',
-              background: TYPE_COLORS[detectedType] + '0a',
-            }}>
-              {TYPE_LABELS[detectedType]}
-            </span>
-          )}
+          <div className="qa-source-row">
+            <button
+              type="button"
+              className={`qa-control-chip qa-source-chip ${effectiveSource === 'link' ? 'active' : ''}`}
+              onClick={() => handleSourceSelect('link')}
+            >
+              {SOURCE_LABELS.link}
+            </button>
+            <button
+              type="button"
+              className={`qa-control-chip qa-source-chip ${effectiveSource === 'text' ? 'active' : ''}`}
+              onClick={() => handleSourceSelect('text')}
+            >
+              {SOURCE_LABELS.text}
+            </button>
+            <button
+              type="button"
+              className={`qa-control-chip qa-source-chip ${effectiveSource === 'upload' ? 'active upload' : 'upload'}`}
+              onClick={handleUploadClick}
+            >
+              {SOURCE_LABELS.upload}
+            </button>
+          </div>
+        </div>
+        <div className="qa-footer-right">
+          <span className="qa-type-pill" style={{
+            color: SOURCE_COLORS[effectiveSource],
+            borderColor: SOURCE_COLORS[effectiveSource] + '30',
+            background: SOURCE_COLORS[effectiveSource] + '0a',
+          }}>
+            {effectiveSource === 'upload' ? 'Process as Upload' : `Process as ${SOURCE_LABELS[effectiveSource]}`}
+          </span>
           <span className="qa-hint">
             {uploadedFile
               ? 'Ready to upload'
@@ -413,13 +483,61 @@ export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInp
           border-top: 1px solid rgba(255, 255, 255, 0.04);
         }
 
+        .qa-source-row {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .qa-control-chip {
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.03);
+          color: #8a8a8a;
+          border-radius: 10px;
+          padding: 6px 12px;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .qa-control-chip:hover {
+          border-color: rgba(255, 255, 255, 0.16);
+          color: #cfcfcf;
+        }
+
+        .qa-source-chip.active {
+          color: #f5f5f5;
+          border-color: rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        .qa-source-chip.upload.active {
+          border-color: rgba(245, 158, 11, 0.35);
+          background: rgba(245, 158, 11, 0.12);
+          color: #fbbf24;
+        }
+
         .qa-footer-left {
           display: flex;
           align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+
+        .qa-footer-right {
+          display: flex;
+          align-items: center;
           gap: 10px;
+          margin-left: auto;
         }
 
         .qa-type-pill {
+          display: inline-flex;
+          align-items: center;
           font-size: 10px;
           font-weight: 600;
           letter-spacing: 0.04em;

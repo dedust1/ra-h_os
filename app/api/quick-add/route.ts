@@ -14,18 +14,18 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedMode: QuickAddMode | undefined =
-      mode === 'link' || mode === 'note' || mode === 'chat' ? mode : undefined;
+      mode === 'link' || mode === 'text' ? mode : undefined;
 
     const normalizedDescription: string | undefined =
       typeof description === 'string' && description.trim() ? description.trim() : undefined;
 
-    const delegation = await enqueueQuickAdd({
+    const result = await enqueueQuickAdd({
       rawInput: input.trim(),
       mode: normalizedMode,
       description: normalizedDescription,
     });
 
-    return NextResponse.json({ success: true, delegation });
+    return NextResponse.json({ success: true, result });
   } catch (error) {
     console.error('[Quick Add API] Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';

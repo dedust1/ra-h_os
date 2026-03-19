@@ -197,8 +197,13 @@ function validateExplicitDescription(description) {
     return 'Description must be explicit and substantial (at least 24 characters).';
   }
   const weakPatterns = /\b(discusses|explores|examines|talks about|is about|delves into)\b/i;
+  const explicitEntityPatterns = /\b(article|artifact|book|brief|claim|company|concept|conversation|dataset|decision|dimension|document|episode|essay|event|guide|idea|insight|interview|lesson|link|node|note|paper|person|plan|placeholder|podcast|post|presentation|project|question|record|research|resource|skill|source|status|summary|talk|target|test node|thread|tool|transcript|tweet|update|video|website|workflow)\b/i;
+  const uncertaintyPatterns = /\b(likely|probably|possibly|appears to be|seems to be|unclear|uncertain)\b/i;
   if (weakPatterns.test(text)) {
     return 'Description is too vague. State exactly what this is and why it matters.';
+  }
+  if (!explicitEntityPatterns.test(text) && !uncertaintyPatterns.test(text)) {
+    return 'Description must explicitly identify what this thing is, or state uncertainty explicitly.';
   }
   return null;
 }

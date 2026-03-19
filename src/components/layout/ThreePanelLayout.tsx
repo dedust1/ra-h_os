@@ -570,7 +570,7 @@ export default function ThreePanelLayout() {
   }, [slotA, slotB, handlePaneTypeClick]);
 
   // Handle Quick Add submit (used by global Add Stuff modal)
-  const handleQuickAddSubmit = useCallback(async ({ input, mode, description }: { input: string; mode: 'link' | 'note' | 'chat'; description?: string }) => {
+  const handleQuickAddSubmit = useCallback(async ({ input, mode, description }: { input: string; mode: 'link' | 'text'; description?: string }) => {
     try {
       const response = await fetch('/api/quick-add', {
         method: 'POST',
@@ -583,15 +583,14 @@ export default function ThreePanelLayout() {
         throw new Error(data.error || 'Failed to submit Quick Add');
       }
 
-      const result = await response.json();
-      const delegation = result.delegation;
+      const data = await response.json();
+      const result = data.result as { id: string; inputType: string } | undefined;
 
-      // Add pending placeholder
-      if (delegation?.id && delegation?.inputType) {
+      if (result?.id) {
         setPendingNodes(prev => [{
-          id: delegation.id,
-          input: input.slice(0, 120),
-          inputType: delegation.inputType,
+          id: result.id,
+          input: input.trim(),
+          inputType: result.inputType || 'note',
           submittedAt: Date.now(),
           status: 'processing' as const,
         }, ...prev]);
