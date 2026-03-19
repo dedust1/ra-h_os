@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, X, ArrowLeft, Plus, Trash2, Edit2, Lock } from 'lucide-react';
+import { X, ArrowLeft, Plus, Trash2, Edit2 } from 'lucide-react';
 import type { Node } from '@/types/database';
 import ConfirmDialog from '../common/ConfirmDialog';
 import InputDialog from '../common/InputDialog';
@@ -237,24 +237,6 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
     }
   };
 
-  const handleToggleLock = async (dimension: string) => {
-    try {
-      const response = await fetch('/api/dimensions/popular', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dimension })
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to toggle dimension');
-      }
-      await fetchDimensions();
-      onDataChanged?.();
-    } catch (error) {
-      console.error('Error toggling lock:', error);
-      alert('Failed to update lock state.');
-    }
-  };
 
   const handleDeleteDimension = async (dimension: string) => {
     setDeletingDimension(dimension);
@@ -616,7 +598,6 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
         }}
       >
         {sortedDimensions.map((dimension) => {
-          const isLocked = dimension.isPriority;
           const isDragTarget = dragHoverDimension === dimension.dimension;
 
           return (
@@ -637,7 +618,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               onDrop={(event) => handleNodeDropOnDimension(event, dimension.dimension)}
               style={{
                 background: isDragTarget ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
-                borderLeft: isLocked ? '2px solid #22c55e' : '2px solid transparent',
+                borderLeft: '2px solid transparent',
                 borderRadius: '6px',
                 padding: '12px 14px',
                 textAlign: 'left',
@@ -664,7 +645,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 width: '28px',
                 height: '28px',
                 borderRadius: '6px',
-                background: isLocked ? 'rgba(34, 197, 94, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                background: 'rgba(255, 255, 255, 0.03)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -673,7 +654,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 <DynamicIcon
                   name={dimensionIcons[dimension.dimension] || 'Folder'}
                   size={14}
-                  style={{ color: isLocked ? '#22c55e' : '#555' }}
+                  style={{ color: '#555' }}
                 />
               </div>
 
@@ -682,7 +663,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 <div style={{
                   fontSize: '13px',
                   fontWeight: 500,
-                  color: isLocked ? '#f0f0f0' : '#999',
+                  color: '#999',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -708,7 +689,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               <span style={{
                 fontSize: '11px',
                 fontWeight: 500,
-                color: isLocked ? '#22c55e' : '#444',
+                color: '#444',
                 fontFamily: 'monospace',
                 flexShrink: 0
               }}>
@@ -743,30 +724,6 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; }}
                 >
                   <Edit2 size={12} />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleLock(dimension.dimension);
-                  }}
-                  title={isLocked ? 'Unlock' : 'Lock'}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '4px',
-                    width: '22px',
-                    height: '22px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    color: isLocked ? '#22c55e' : '#666',
-                    transition: 'color 0.1s ease'
-                  }}
-                  onMouseEnter={(e) => { if (!isLocked) e.currentTarget.style.color = '#22c55e'; }}
-                  onMouseLeave={(e) => { if (!isLocked) e.currentTarget.style.color = '#666'; }}
-                >
-                  {isLocked ? <Check size={12} /> : <Lock size={12} />}
                 </button>
                 <button
                   onClick={(e) => {
@@ -1740,7 +1697,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                background: editingDimensionModal.isPriority ? 'rgba(34, 197, 94, 0.1)' : '#111',
+                background: '#111',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
@@ -1748,7 +1705,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 <DynamicIcon
                   name={editModalIcon}
                   size={16}
-                  style={{ color: editingDimensionModal.isPriority ? '#22c55e' : '#888' }}
+                  style={{ color: '#888' }}
                 />
               </div>
               <div>
@@ -1761,7 +1718,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 </div>
                 <div style={{
                   fontSize: '13px',
-                  color: editingDimensionModal.isPriority ? '#22c55e' : '#888'
+                  color: '#888'
                 }}>
                   {editingDimensionModal.dimension}
                 </div>

@@ -14,16 +14,6 @@ import { useDimensionIcons } from '@/context/DimensionIconsContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import { SourceReader } from './source';
 
-interface PopularDimension {
-  dimension: string;
-  count: number;
-  isPriority: boolean;
-}
-
-interface DimensionsResponse {
-  success: boolean;
-  data: PopularDimension[];
-}
 
 interface NodeSearchResult {
   id: number;
@@ -58,7 +48,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   const [savingField, setSavingField] = useState<string | null>(null);
   const [embeddingNode, setEmbeddingNode] = useState<number | null>(null);
   const [showReembedPrompt, setShowReembedPrompt] = useState<number | null>(null);
-  const [priorityDimensions, setPriorityDimensions] = useState<string[]>([]);
   
   const activeNodeId = activeTab;
   const currentNode = activeNodeId !== null ? nodesData[activeNodeId] : undefined;
@@ -172,10 +161,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     return { type: 'inferred', label: 'will be inferred' };
   };
 
-  // Fetch priority dimensions on mount
-  useEffect(() => {
-    fetchPriorityDimensions();
-  }, []);
 
   // Generate node search suggestions
   useEffect(() => {
@@ -253,19 +238,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     setSourceEditMode(false);
     setSourceEditValue('');
   }, [activeTab]);
-
-  const fetchPriorityDimensions = async () => {
-    try {
-      const response = await fetch('/api/dimensions/popular');
-      const payload = (await response.json()) as DimensionsResponse;
-      if (payload?.success && Array.isArray(payload.data)) {
-        const priority = payload.data.filter((d) => d.isPriority).map((d) => d.dimension);
-        setPriorityDimensions(priority);
-      }
-    } catch (error) {
-      console.error('Error fetching priority dimensions:', error);
-    }
-  };
 
   const fetchNodeData = async (id: number) => {
     setLoadingNodes(prev => new Set(prev).add(id));
@@ -2074,7 +2046,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
               }}>
                 <DimensionTags
                 dimensions={nodesData[activeTab].dimensions || []}
-                priorityDimensions={priorityDimensions}
                 onUpdate={async (newDimensions) => {
                   try {
                     const response = await fetch(`/api/nodes/${activeTab}`, {
@@ -2098,28 +2069,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     alert('Failed to save dimensions. Please try again.');
                   }
                 }}
-                onPriorityToggle={async (dimension) => {
-                  try {
-                    const response = await fetch('/api/dimensions/popular', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({ dimension }),
-                    });
-
-                    if (!response.ok) {
-                      throw new Error('Failed to toggle priority');
-                    }
-
-                    // Refresh priority dimensions list
-                    await fetchPriorityDimensions();
-                  } catch (error) {
-                    console.error('Error toggling priority:', error);
-                    alert('Failed to toggle priority. Please try again.');
-                  }
-                }}
-                disabled={false}
               />
               </div>
             </div>

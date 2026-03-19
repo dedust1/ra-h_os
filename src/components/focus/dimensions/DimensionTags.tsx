@@ -5,9 +5,7 @@ import DimensionSearchModal from './DimensionSearchModal';
 
 interface DimensionTagsProps {
   dimensions: string[];
-  priorityDimensions?: string[];
   onUpdate: (dimensions: string[]) => Promise<void>;
-  onPriorityToggle?: (dimension: string) => Promise<void>;
   disabled?: boolean;
 }
 
@@ -16,12 +14,10 @@ interface DimensionSuggestion {
   count: number;
 }
 
-export default function DimensionTags({ 
-  dimensions, 
-  priorityDimensions = [],
-  onUpdate, 
-  onPriorityToggle,
-  disabled = false 
+export default function DimensionTags({
+  dimensions,
+  onUpdate,
+  disabled = false
 }: DimensionTagsProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,14 +28,7 @@ export default function DimensionTags({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Sort dimensions with priority ones first
-  const sortedDimensions = [...dimensions].sort((a, b) => {
-    const aPriority = priorityDimensions.includes(a);
-    const bPriority = priorityDimensions.includes(b);
-    if (aPriority && !bPriority) return -1;
-    if (!aPriority && bPriority) return 1;
-    return 0;
-  });
+  const sortedDimensions = [...dimensions];
 
   useEffect(() => {
     if (isAdding && inputRef.current) {
@@ -169,12 +158,6 @@ export default function DimensionTags({
     await onUpdate(newDimensions);
   };
 
-  const togglePriority = async (dimension: string) => {
-    if (onPriorityToggle) {
-      await onPriorityToggle(dimension);
-    }
-  };
-
   // Check if dimensions overflow 2 lines (approximate)
   const shouldShowExpandButton = sortedDimensions.length > 6; // Rough estimate for 2 lines
   const displayedDimensions = (!isExpanded && shouldShowExpandButton) 
@@ -216,8 +199,6 @@ export default function DimensionTags({
         )}
 
         {displayedDimensions.map((dimension, index) => {
-          const isPriority = priorityDimensions.includes(dimension);
-          
           return (
             <div
               key={`${dimension}-${index}`}
@@ -225,35 +206,28 @@ export default function DimensionTags({
               onDragStart={() => handleDragStart(index)}
               onDragOver={(e) => handleDragOver(e, index)}
               onDragEnd={handleDragEnd}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!disabled && onPriorityToggle) {
-                  togglePriority(dimension);
-                }
-              }}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '3px',
                 fontSize: '10px',
-                color: isPriority ? '#22c55e' : '#d1d5db', /* Changed from gold to green */
-                background: isPriority ? '#0f2417' : '#1a1a1a', /* Green-tinted background */
-                border: isPriority ? '1px solid #166534' : '1px solid #333', /* Green border */
+                color: '#d1d5db',
+                background: '#1a1a1a',
+                border: '1px solid #333',
                 borderRadius: '8px',
                 padding: '2px 6px',
-                cursor: disabled ? 'default' : (onPriorityToggle ? 'pointer' : 'grab'),
+                cursor: disabled ? 'default' : 'grab',
                 opacity: draggedIndex === index ? 0.5 : 1,
                 transition: 'all 0.2s'
               }}
               onMouseEnter={(e) => {
                 if (!disabled) {
-                  e.currentTarget.style.borderColor = isPriority ? '#22c55e' : '#555'; /* Green hover */
+                  e.currentTarget.style.borderColor = '#555';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = isPriority ? '#166534' : '#333'; /* Green default */
+                e.currentTarget.style.borderColor = '#333';
               }}
-              title={isPriority ? 'Priority dimension (click to unpin)' : 'Click to pin as priority dimension'}
             >
               <span>{dimension}</span>
               
