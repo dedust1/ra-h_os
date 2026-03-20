@@ -118,26 +118,24 @@ export default function RawFormatter({ content, onTextSelect, highlightedText, h
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
       onMouseUp={handleMouseUp}
       style={{
-        maxWidth: '680px',
-        margin: '0 auto',
-        padding: '24px 16px',
+        padding: '16px 0',
       }}
     >
       {paragraphs.map((paragraph, index) => (
         <p
           key={index}
           style={{
-            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontFamily: 'inherit',
             fontSize: '15px',
             lineHeight: '1.7',
-            color: '#d4d4d4',
+            color: 'var(--rah-text-base)',
             margin: 0,
-            marginBottom: index < paragraphs.length - 1 ? '1.5em' : 0,
-            whiteSpace: 'pre-wrap', // Preserve single newlines within paragraphs
+            marginBottom: index < paragraphs.length - 1 ? '1.2em' : 0,
+            whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
           }}
         >

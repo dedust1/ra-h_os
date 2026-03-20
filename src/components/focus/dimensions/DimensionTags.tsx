@@ -323,7 +323,7 @@ export default function DimensionTags({
           </div>
         )}
         
-        {/* Add dimension button - Opens modal */}
+        {/* Add dimension button */}
         {!disabled && (
           <button
             onClick={(e) => {
@@ -333,43 +333,29 @@ export default function DimensionTags({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '8px',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: '#22c55e',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              borderBottom: '1px solid #1a1a1a',
-              background: '#0a0a0a',
-              border: 'none',
+              justifyContent: 'center',
+              width: '20px',
+              height: '20px',
+              fontSize: '14px',
+              lineHeight: 1,
+              color: 'var(--rah-text-muted)',
+              background: 'transparent',
+              border: '1px dashed #333',
+              borderRadius: '4px',
               cursor: 'pointer',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              transition: 'all 0.2s'
+              transition: 'color 120ms ease, border-color 120ms ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#151515';
+              e.currentTarget.style.color = 'var(--rah-text-soft)';
+              e.currentTarget.style.borderColor = '#555';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#0a0a0a';
+              e.currentTarget.style.color = 'var(--rah-text-muted)';
+              e.currentTarget.style.borderColor = '#333';
             }}
             title="Add dimension"
           >
-            <span style={{ 
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '16px',
-              height: '16px',
-              borderRadius: '50%',
-              background: '#22c55e',
-              color: '#0a0a0a',
-              fontSize: '12px',
-              lineHeight: 1,
-              fontWeight: 300,
-              flexShrink: 0
-            }}>+</span>
-            Add
+            +
           </button>
         )}
       </div>

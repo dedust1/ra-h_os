@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { detectContentType, getContentTypeLabel } from './ContentDetector';
+import { detectContentType } from './ContentDetector';
 import RawFormatter from './formatters/RawFormatter';
 import TranscriptFormatter from './formatters/TranscriptFormatter';
 import BookFormatter from './formatters/BookFormatter';
@@ -12,18 +12,14 @@ interface SourceReaderProps {
   content: string;
   onTextSelect?: (text: string) => void;
   highlightedText?: string | null;
+  onContentClick?: () => void;
 }
 
-/**
- * Source Reader - Read-only formatted view of source content
- *
- * This is a pure presentation component that NEVER modifies the source data.
- * It detects content type and applies appropriate formatting for comfortable reading.
- */
 export default function SourceReader({
   content,
   onTextSelect,
   highlightedText,
+  onContentClick,
 }: SourceReaderProps) {
   const [showSearch, setShowSearch] = useState(false);
   const [searchHighlight, setSearchHighlight] = useState<string | null>(null);
@@ -31,14 +27,10 @@ export default function SourceReader({
   const [scrollTrigger, setScrollTrigger] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Detect content type (memoized for performance)
   const contentType = useMemo(() => detectContentType(content), [content]);
-  const contentTypeLabel = getContentTypeLabel(contentType);
-
-  // Combined highlight: search takes precedence over external highlight
   const activeHighlight = searchHighlight || highlightedText;
 
-  // Keyboard shortcut for Cmd+F
+  // Cmd+F to open search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
@@ -46,23 +38,17 @@ export default function SourceReader({
         setShowSearch(true);
       }
     };
-
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Scroll to current match when search highlight changes
+  // Scroll to current search match
   useEffect(() => {
     if (!searchHighlight || !contentRef.current) return;
-
-    // Small delay to let React render the mark element
     const timer = setTimeout(() => {
       const currentMatch = contentRef.current?.querySelector('mark[data-search-match="current"]');
-      if (currentMatch) {
-        currentMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      currentMatch?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 50);
-
     return () => clearTimeout(timer);
   }, [searchHighlight, scrollTrigger]);
 
@@ -75,11 +61,9 @@ export default function SourceReader({
   const handleHighlightChange = useCallback((text: string | null, matchIndex: number) => {
     setSearchHighlight(text);
     setSearchMatchIndex(matchIndex);
-    // Trigger scroll even if same text (for navigating between matches)
     setScrollTrigger(prev => prev + 1);
   }, []);
 
-  // Render appropriate formatter based on content type
   const renderContent = () => {
     const highlightIndex = showSearch ? searchMatchIndex : undefined;
     switch (contentType) {
@@ -96,57 +80,8 @@ export default function SourceReader({
   };
 
   return (
-    <div style={{
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      background: 'var(--rah-bg-surface)',
-      borderRadius: '4px',
-      overflow: 'hidden',
-    }}>
-      {/* Header with content type and search */}
-      {content && content.length >= 50 && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 16px',
-          borderBottom: '1px solid var(--rah-border)',
-        }}>
-          <span style={{
-            fontSize: '10px',
-            color: 'var(--rah-text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}>
-            Detected: {contentTypeLabel}
-          </span>
-          <button
-            onClick={() => setShowSearch(!showSearch)}
-            title="Search content (⌘F)"
-            style={{
-              background: showSearch ? 'var(--rah-border-strong)' : 'transparent',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '4px 8px',
-              cursor: 'pointer',
-              color: showSearch ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              fontSize: '10px',
-              transition: 'all 150ms ease',
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
-            </svg>
-            <span>Search</span>
-          </button>
-        </div>
-      )}
-
-      {/* Search bar */}
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Search bar — only visible when active (Cmd+F) */}
       {showSearch && content && (
         <SourceSearchBar
           content={content}
@@ -155,13 +90,16 @@ export default function SourceReader({
         />
       )}
 
-      {/* Formatted content */}
+      {/* Content — no chrome, no background, just the text */}
       <div
         ref={contentRef}
-        style={{
-          flex: 1,
-          overflow: 'auto',
+        onClick={() => {
+          if (!onContentClick) return;
+          const selected = window.getSelection?.()?.toString().trim();
+          if (selected) return;
+          onContentClick();
         }}
+        style={{ cursor: onContentClick ? 'text' : 'default' }}
       >
         {renderContent()}
       </div>

@@ -170,41 +170,39 @@ export default function TranscriptFormatter({ content, onTextSelect, highlighted
   }
 
   return (
-    <div 
+    <div
       ref={containerRef}
       onMouseUp={handleMouseUp}
       style={{
-        maxWidth: '680px',
-        margin: '0 auto',
-        padding: '24px 16px',
+        padding: '16px 0',
       }}
     >
       {segments.map((segment, index) => (
         <div
           key={index}
           style={{
-            marginBottom: '24px',
+            marginBottom: '16px',
           }}
         >
           {/* Timestamp and speaker on same line */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            marginBottom: '8px',
+            gap: '8px',
+            marginBottom: '4px',
           }}>
             <span style={{
-              fontSize: '11px',
+              fontSize: '10px',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
-              color: '#555',
+              color: 'var(--rah-text-muted)',
             }}>
               {segment.timestamp}
             </span>
             {segment.speaker && (
               <span style={{
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 600,
-                color: '#888',
+                color: 'var(--rah-text-soft)',
               }}>
                 {segment.speaker}
               </span>
@@ -213,10 +211,10 @@ export default function TranscriptFormatter({ content, onTextSelect, highlighted
 
           {/* Text content */}
           <div style={{
-            fontFamily: "Georgia, 'Times New Roman', serif",
-            fontSize: '16px',
-            lineHeight: '1.75',
-            color: '#d4d4d4',
+            fontFamily: 'inherit',
+            fontSize: '15px',
+            lineHeight: '1.7',
+            color: 'var(--rah-text-base)',
             whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
           }}>

@@ -33,17 +33,15 @@ export default function MarkdownFormatter({ content, onTextSelect }: MarkdownFor
   }, [onTextSelect]);
 
   return (
-    <div 
+    <div
       ref={containerRef}
       onMouseUp={handleMouseUp}
       style={{
-        maxWidth: '680px',
-        margin: '0 auto',
-        padding: '24px 16px',
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        fontSize: '16px',
-        lineHeight: '1.75',
-        color: '#d4d4d4',
+        padding: '16px 0',
+        fontFamily: 'inherit',
+        fontSize: '15px',
+        lineHeight: '1.7',
+        color: 'var(--rah-text-base)',
       }}
     >
       <MarkdownWithNodeTokens content={content} />

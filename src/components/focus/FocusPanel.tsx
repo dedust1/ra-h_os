@@ -1,25 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef, type DragEvent } from 'react';
-import { Eye, Trash2, Link, Loader, Database, Check, RefreshCw, Pencil, X, Save, Plus } from 'lucide-react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { Trash2, Loader, Database, RefreshCw, Pencil, X, Save, Plus, Link2, Tag, Share2, AlignLeft } from 'lucide-react';
 import { parseAndRenderContent } from '@/components/helpers/NodeLabelRenderer';
-import MarkdownWithNodeTokens from '@/components/helpers/MarkdownWithNodeTokens';
-import FormattingToolbar from '@/components/focus/FormattingToolbar';
-import { parseNodeMarkers } from '@/tools/infrastructure/nodeFormatter';
-import { Node, NodeConnection, Chunk } from '@/types/database';
+import { Node, NodeConnection } from '@/types/database';
 import DimensionTags from './dimensions/DimensionTags';
 import { getNodeIcon } from '@/utils/nodeIcons';
 import { useDimensionIcons } from '@/context/DimensionIconsContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import { SourceReader } from './source';
+import SourceEditor from './source/SourceEditor';
 import { openExternalUrl, shouldOpenExternally } from '@/utils/openExternalUrl';
-
-
-interface NodeSearchResult {
-  id: number;
-  title: string;
-  dimensions?: string[];
-}
+import NodeSearchModal from './edges/NodeSearchModal';
 
 interface FocusPanelProps {
   openTabs: number[];
@@ -28,752 +20,258 @@ interface FocusPanelProps {
   onNodeClick?: (nodeId: number) => void;
   onTabClose: (nodeId: number) => void;
   refreshTrigger?: number;
+  onTextSelect?: (nodeId: number, nodeTitle: string, text: string) => void;
+  highlightedPassage?: { nodeId: number; selectedText: string } | null;
   onReorderTabs?: (fromIndex: number, toIndex: number) => void;
   onOpenInOtherSlot?: (nodeId: number) => void;
   hideTabBar?: boolean;
-  onTextSelect?: (nodeId: number, nodeTitle: string, text: string) => void;
-  highlightedPassage?: { nodeId: number; selectedText: string } | null;
 }
 
-export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeClick, onTabClose, refreshTrigger, onOpenInOtherSlot, hideTabBar, onTextSelect, highlightedPassage }: FocusPanelProps) {
-  const [nodesData, setNodesData] = useState<Record<number, Node>>({});
+type HoverSection = 'description' | 'source' | null;
+
+export default function FocusPanel({
+  openTabs,
+  activeTab,
+  onTabSelect,
+  onNodeClick,
+  onTabClose,
+  refreshTrigger,
+  onTextSelect,
+  highlightedPassage,
+  onReorderTabs,
+  onOpenInOtherSlot,
+  hideTabBar,
+}: FocusPanelProps) {
   const { dimensionIcons } = useDimensionIcons();
-
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: number } | null>(null); 
+  const [nodesData, setNodesData] = useState<Record<number, Node>>({});
+  const [edgesData, setEdgesData] = useState<Record<number, NodeConnection[]>>({});
   const [loadingNodes, setLoadingNodes] = useState<Set<number>>(new Set());
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState<string>('');
-  const [editingNodeId, setEditingNodeId] = useState<number | null>(null);
-  const [savingField, setSavingField] = useState<string | null>(null);
-  const [embeddingNode, setEmbeddingNode] = useState<number | null>(null);
-  const [showReembedPrompt, setShowReembedPrompt] = useState<number | null>(null);
-  
-  const activeNodeId = activeTab;
-  const currentNode = activeNodeId !== null ? nodesData[activeNodeId] : undefined;
-
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(null);
-
-  // Auto-hide re-embed prompt after a few seconds
-  useEffect(() => {
-    if (showReembedPrompt !== null) {
-      const timeout = setTimeout(() => setShowReembedPrompt(null), 4000);
-      return () => clearTimeout(timeout);
-    }
-  }, [showReembedPrompt]);
-
-  // Close context menu when clicking outside
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => setContextMenu(null);
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContextMenu(null);
-    };
-    document.addEventListener('click', handleClick);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [contextMenu]);
-
-  // Edges state management (following same patterns as nodes)
-  const [edgesData, setEdgesData] = useState<{ [key: number]: NodeConnection[] }>({});
   const [loadingEdges, setLoadingEdges] = useState<Set<number>>(new Set());
-  const [addingEdge, setAddingEdge] = useState<number | null>(null);
-  const [nodeSearchQuery, setNodeSearchQuery] = useState('');
-  const [nodeSearchSuggestions, setNodeSearchSuggestions] = useState<NodeSearchResult[]>([]);
-  const [selectedSearchIndex, setSelectedSearchIndex] = useState(0);
-  const [edgeExplanation, setEdgeExplanation] = useState('');
-  const [pendingEdgeTarget, setPendingEdgeTarget] = useState<{ id: number; title: string } | null>(null);
-  const [deletingEdge, setDeletingEdge] = useState<number | null>(null);
-  const [edgeEditingId, setEdgeEditingId] = useState<number | null>(null);
-  const [edgeEditingValue, setEdgeEditingValue] = useState<string>('');
-  const [edgeSavingId, setEdgeSavingId] = useState<number | null>(null);
+  const [embeddingNode, setEmbeddingNode] = useState<number | null>(null);
   const [deletingNode, setDeletingNode] = useState<number | null>(null);
   const [pendingDeleteNodeId, setPendingDeleteNodeId] = useState<number | null>(null);
-  
-  // Chunk content toggle state - default to expanded (true)
-  const [chunkExpanded, setChunkExpanded] = useState<{ [key: number]: boolean }>({});
-  
-  // Edges expand/collapse state
-  const [edgesExpanded, setEdgesExpanded] = useState<{ [key: number]: boolean }>({});
-  
-  // Title expanded state for click-to-expand full title
-  const [titleExpanded, setTitleExpanded] = useState<{ [key: number]: boolean }>({});
+  const [deletingEdge, setDeletingEdge] = useState<number | null>(null);
+  const [edgeEditingId, setEdgeEditingId] = useState<number | null>(null);
+  const [edgeEditingValue, setEdgeEditingValue] = useState('');
+  const [edgeSavingId, setEdgeSavingId] = useState<number | null>(null);
+  const [edgesExpanded, setEdgesExpanded] = useState<Record<number, boolean>>({});
+  const [edgeSearchOpen, setEdgeSearchOpen] = useState(false);
+  const [hoveredConnectionId, setHoveredConnectionId] = useState<number | null>(null);
+  const [propsCollapsed, setPropsCollapsed] = useState(false);
 
-  // Description regeneration state
-  const [regeneratingDescription, setRegeneratingDescription] = useState<number | null>(null);
-
-  // Content tab state: 'desc', 'notes', 'edges', or 'source'
-  const [activeContentTab, setActiveContentTab] = useState<'notes' | 'desc' | 'edges' | 'source'>('desc');
-
-  // Desc (description) edit mode state
+  const [titleEditMode, setTitleEditMode] = useState(false);
+  const [titleEditValue, setTitleEditValue] = useState('');
+  const [titleSaving, setTitleSaving] = useState(false);
+  const [linkEditMode, setLinkEditMode] = useState(false);
+  const [linkEditValue, setLinkEditValue] = useState('');
+  const [linkSaving, setLinkSaving] = useState(false);
   const [descEditMode, setDescEditMode] = useState(false);
   const [descEditValue, setDescEditValue] = useState('');
   const [descSaving, setDescSaving] = useState(false);
-
-  // Notes edit mode state (separate from inline editing)
-  const [notesEditMode, setNotesEditMode] = useState(false);
-  const [notesEditValue, setNotesEditValue] = useState('');
-  const [notesSaving, setNotesSaving] = useState(false);
-  const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Source (chunk) edit mode
+  const [regeneratingDescription, setRegeneratingDescription] = useState<number | null>(null);
   const [sourceEditMode, setSourceEditMode] = useState(false);
   const [sourceEditValue, setSourceEditValue] = useState('');
   const [sourceSaving, setSourceSaving] = useState(false);
+  const [hoveredSection, setHoveredSection] = useState<HoverSection>(null);
 
-  // Source reader mode: 'raw' (monospace) or 'reader' (formatted typography)
-  const [sourceReaderMode, setSourceReaderMode] = useState<'raw' | 'reader'>('reader');
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const descTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const sourceTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const skipTitleBlurRef = useRef(false);
+  const skipLinkBlurRef = useRef(false);
 
-  // Embedded chunks state (actual chunks from chunks table)
-  const [chunksData, setChunksData] = useState<Record<number, Chunk[]>>({});
-  const [loadingChunks, setLoadingChunks] = useState<Set<number>>(new Set());
-  const [chunksExpanded, setChunksExpanded] = useState<Record<number, boolean>>({});
+  const currentNode = activeTab !== null ? nodesData[activeTab] : undefined;
+  const currentEdges = activeTab !== null ? edgesData[activeTab] || [] : [];
+  const currentEdgesExpanded = activeTab !== null ? Boolean(edgesExpanded[activeTab]) : false;
+  const visibleEdges = currentEdgesExpanded ? currentEdges : currentEdges.slice(0, 3);
 
-  // Edge creation search toggle
-  const [edgeSearchOpen, setEdgeSearchOpen] = useState(false);
-
-  // Helper: preview edge type based on heuristics (mirrors backend logic)
-  const previewEdgeType = (explanation: string): { type: string; label: string } | null => {
-    const norm = (explanation || '').trim().toLowerCase();
-    if (!norm) return null;
-
-    const startsWithAny = (prefixes: string[]) => prefixes.some((p) => norm.startsWith(p));
-
-    if (startsWithAny(['created by', 'made by', 'authored by', 'written by', 'founded by'])) {
-      return { type: 'created_by', label: 'created by' };
-    }
-    if (startsWithAny(['part of', 'episode of', 'belongs to', 'in the series', 'in this series'])) {
-      return { type: 'part_of', label: 'part of' };
-    }
-    if (startsWithAny(['features', 'mentions', 'hosted by', 'guest:', 'host:'])) {
-      return { type: 'part_of', label: 'part of' };
-    }
-    if (startsWithAny(['came from', 'inspired by', 'derived from', 'from'])) {
-      return { type: 'source_of', label: 'source of' };
-    }
-    if (startsWithAny(['related to', 'related'])) {
-      return { type: 'related_to', label: 'related to' };
-    }
-    // No heuristic match - will be AI-inferred
-    return { type: 'inferred', label: 'will be inferred' };
-  };
-
-
-  // Generate node search suggestions
   useEffect(() => {
-    if (!nodeSearchQuery.trim() || !activeTab) {
-      setNodeSearchSuggestions([]);
-      return;
-    }
+    if (titleEditMode) titleInputRef.current?.focus();
+  }, [titleEditMode]);
 
-    const fetchNodeSearchSuggestions = async () => {
-      try {
-        const response = await fetch(`/api/nodes/search?q=${encodeURIComponent(nodeSearchQuery)}&limit=10`);
-        const result = await response.json();
-        
-        if (result.success) {
-          const nodeSuggestions: NodeSearchResult[] = result.data
-            .filter((node: any) => node.id !== activeTab) // Exclude current node
-            .map((node: any) => ({
-              id: node.id,
-              title: node.title,
-              dimensions: node.dimensions || []
-            }));
-          
-          setNodeSearchSuggestions(nodeSuggestions);
-          setSelectedSearchIndex(0);
-        }
-      } catch (error) {
-        console.error('Error fetching node search suggestions:', error);
-        setNodeSearchSuggestions([]);
-      }
-    };
+  useEffect(() => {
+    if (linkEditMode) linkInputRef.current?.focus();
+  }, [linkEditMode]);
 
-    const timeoutId = setTimeout(fetchNodeSearchSuggestions, 200);
-    return () => clearTimeout(timeoutId);
-  }, [nodeSearchQuery, activeTab]);
+  useEffect(() => {
+    if (descEditMode) descTextareaRef.current?.focus();
+  }, [descEditMode]);
 
-  // Fetch node data when new tabs are opened
+  useEffect(() => {
+    if (sourceEditMode) sourceTextareaRef.current?.focus();
+  }, [sourceEditMode]);
+
+
   useEffect(() => {
     openTabs.forEach((tabId) => {
       if (!nodesData[tabId] && !loadingNodes.has(tabId)) {
-        fetchNodeData(tabId);
+        void fetchNodeData(tabId);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTabs]);
+  }, [openTabs, nodesData, loadingNodes]);
 
   useEffect(() => {
     openTabs.forEach((tabId) => {
       if (nodesData[tabId] && !edgesData[tabId] && !loadingEdges.has(tabId)) {
-        fetchEdgesData(tabId);
+        void fetchEdgesData(tabId);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTabs, nodesData, edgesData]);
+  }, [openTabs, nodesData, edgesData, loadingEdges]);
 
-
-  // Refresh data when SSE events trigger updates
   useEffect(() => {
     if (refreshTrigger !== undefined && refreshTrigger > 0 && activeTab) {
-      fetchNodeData(activeTab);
-      fetchEdgesData(activeTab);
+      void fetchNodeData(activeTab);
+      void fetchEdgesData(activeTab);
     }
   }, [refreshTrigger, activeTab]);
 
-  // Clear editing state when switching nodes
   useEffect(() => {
-    // Clear all edit modes when switching to a different node
-    setEditingField(null);
-    setEditingValue('');
-    setEditingNodeId(null);
-    // Also clear notes/desc/source/edges edit modes
-    setNotesEditMode(false);
-    setNotesEditValue('');
+    setTitleEditMode(false);
+    setTitleEditValue('');
+    setLinkEditMode(false);
+    setLinkEditValue('');
     setDescEditMode(false);
     setDescEditValue('');
     setSourceEditMode(false);
     setSourceEditValue('');
     setEdgeSearchOpen(false);
-    setNodeSearchQuery('');
-    setNodeSearchSuggestions([]);
+    setEdgeEditingId(null);
+    setEdgeEditingValue('');
+    setHoveredSection(null);
   }, [activeTab]);
 
   const fetchNodeData = async (id: number) => {
     setLoadingNodes(prev => new Set(prev).add(id));
-    // First try to fetch as a node
     try {
-      const nodeResponse = await fetch(`/api/nodes/${id}`);
-      if (nodeResponse.ok) {
-        const data = await nodeResponse.json();
-        if (data.node) {
-          setNodesData(prev => ({ ...prev, [id]: data.node }));
-          setLoadingNodes(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(id);
-            return newSet;
-          });
-          return;
-        }
+      const response = await fetch(`/api/nodes/${id}`);
+      const data = await response.json();
+      if (response.ok && data.node) {
+        setNodesData(prev => ({ ...prev, [id]: data.node }));
       }
     } catch (error) {
       console.warn(`Failed to fetch node ${id}:`, error);
+    } finally {
+      setLoadingNodes(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
-    setLoadingNodes(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(id);
-      return newSet;
-    });
   };
-
 
   const fetchEdgesData = async (nodeId: number) => {
     setLoadingEdges(prev => new Set(prev).add(nodeId));
     try {
       const response = await fetch(`/api/nodes/${nodeId}/edges`);
       const data = await response.json();
-      if (data.success && data.data) {
+      if (response.ok && data.success && data.data) {
         setEdgesData(prev => ({ ...prev, [nodeId]: data.data }));
       }
     } catch (error) {
       console.error(`Error fetching edges for node ${nodeId}:`, error);
     } finally {
       setLoadingEdges(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(nodeId);
-        return newSet;
+        const next = new Set(prev);
+        next.delete(nodeId);
+        return next;
       });
     }
   };
 
-  // Fetch embedded chunks for a node
-  const fetchChunksData = async (nodeId: number) => {
-    if (loadingChunks.has(nodeId)) return;
-    setLoadingChunks(prev => new Set(prev).add(nodeId));
-    try {
-      const response = await fetch(`/api/nodes/${nodeId}/chunks`);
-      const data = await response.json();
-      if (data.success && data.chunks) {
-        setChunksData(prev => ({ ...prev, [nodeId]: data.chunks }));
-      }
-    } catch (error) {
-      console.error(`Error fetching chunks for node ${nodeId}:`, error);
-    } finally {
-      setLoadingChunks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(nodeId);
-        return newSet;
-      });
+  const updateNode = async (nodeId: number, updates: Record<string, unknown>) => {
+    const response = await fetch(`/api/nodes/${nodeId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update node');
     }
-  };
 
-  // Fetch chunks when switching to Source tab
-  useEffect(() => {
-    if (activeContentTab === 'source' && activeTab && !chunksData[activeTab] && !loadingChunks.has(activeTab)) {
-      fetchChunksData(activeTab);
+    const result = await response.json();
+    if (result.node) {
+      setNodesData(prev => ({ ...prev, [nodeId]: result.node }));
+      return result.node as Node;
     }
-  }, [activeContentTab, activeTab]);
 
-  const truncateTitle = (title: string, maxLength: number = 20) => {
-    if (title.length <= maxLength) return title;
-    return title.substring(0, maxLength) + '...';
+    throw new Error('Missing updated node in response');
   };
 
-  // Focus input when editing starts
-  useEffect(() => {
-    if (editingField && inputRef.current) {
-      inputRef.current.focus();
-      if (inputRef.current instanceof HTMLInputElement || inputRef.current instanceof HTMLTextAreaElement) {
-        inputRef.current.select();
-      }
-    }
-  }, [editingField]);
-
-  const startEdit = (field: string, currentValue: string) => {
-    if (savingField) return; // Don't start edit if currently saving
-    setEditingField(field);
-    setEditingValue(currentValue || '');
-    if (activeNodeId !== null) setEditingNodeId(activeNodeId);
+  const startTitleEdit = () => {
+    if (!currentNode) return;
+    setTitleEditValue(currentNode.title || '');
+    setTitleEditMode(true);
   };
 
-  const cancelEdit = () => {
-    setEditingField(null);
-    setEditingValue('');
-    setEditingNodeId(null);
-  };
-
-  const saveField = async () => {
-    const nodeId = editingNodeId ?? activeNodeId;
-    if (!nodeId || !editingField) return;
-    // Validate required fields
-    if (editingField === 'title' && !editingValue.trim()) {
-      alert('Title cannot be empty');
+  const saveTitle = async () => {
+    if (!activeTab) return;
+    const nextTitle = titleEditValue.trim();
+    if (!nextTitle) {
+      window.alert('Title cannot be empty');
       return;
     }
 
-    setSavingField(editingField);
+    setTitleSaving(true);
     try {
-      const updateData: Record<string, string> = {};
-
-      if (editingField === 'notes') {
-        updateData.notes = editingValue;
-      } else {
-        updateData[editingField] = editingValue;
-      }
-
-      const response = await fetch(`/api/nodes/${nodeId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save');
-      }
-
-      const result = await response.json();
-      if (result.node) {
-        setNodesData(prev => ({ ...prev, [nodeId]: result.node }));
-      }
-
-      // Safety net: ensure edges exist for any tokens present in saved notes
-      if (editingField === 'notes' && typeof editingValue === 'string') {
-        try {
-          const tokens = parseNodeMarkers(editingValue);
-          const uniqueTargets = Array.from(new Set(tokens.map(t => t.id))).filter(id => id !== nodeId);
-          await Promise.allSettled(uniqueTargets.map(async (toId) => {
-            await fetch('/api/edges', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                from_node_id: nodeId,
-                to_node_id: toId,
-                source: 'user',
-                explanation: 'Referenced via @ mention'
-              })
-            });
-          }));
-          // Refresh edges after ensuring
-          await fetchEdgesData(nodeId);
-        } catch (e) {
-          console.warn('Failed to ensure edges from tokens:', e);
-        }
-      }
-      
-      setEditingField(null);
-      setEditingValue('');
-      setEditingNodeId(null);
+      await updateNode(activeTab, { title: nextTitle });
+      setTitleEditMode(false);
+      setTitleEditValue('');
     } catch (error) {
-      console.error('Error saving field:', error);
-      alert('Failed to save changes. Please try again.');
+      console.error('Error saving title:', error);
+      window.alert('Failed to save title. Please try again.');
     } finally {
-      setSavingField(null);
+      setTitleSaving(false);
     }
   };
 
-  // Explicit content saver to avoid stale state reads (used after @mention insert)
-  const saveContentExplicit = async (contentValue: string, nodeId: number) => {
-    if (!nodeId) return;
-    setSavingField('content');
+  const startLinkEdit = () => {
+    setLinkEditValue(currentNode?.link || '');
+    setLinkEditMode(true);
+  };
+
+  const saveLink = async () => {
+    if (!activeTab) return;
+    setLinkSaving(true);
     try {
-      const response = await fetch(`/api/nodes/${nodeId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: contentValue }),
-      });
-      if (!response.ok) throw new Error('Failed to save');
-      const result = await response.json();
-      if (result.node) {
-        setNodesData(prev => ({ ...prev, [nodeId]: result.node }));
-      }
-      // Safety net: ensure edges for tokens in this specific content
-      try {
-        const tokens = parseNodeMarkers(contentValue);
-        const uniqueTargets = Array.from(new Set(tokens.map(t => t.id))).filter(id => id !== nodeId);
-        await Promise.allSettled(uniqueTargets.map(async (toId) => {
-          await fetch('/api/edges', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from_node_id: nodeId,
-              to_node_id: toId,
-              source: 'user',
-              explanation: 'Referenced via @ mention'
-            })
-          });
-        }));
-        await fetchEdgesData(nodeId);
-      } catch (e) {
-        console.warn('Failed to ensure edges from tokens (explicit save):', e);
-      }
-      // Exit edit mode
-      setEditingField(null);
-      setEditingValue('');
-    } catch (e) {
-      console.error('Error saving content (explicit):', e);
-      alert('Failed to save changes. Please try again.');
+      await updateNode(activeTab, { link: linkEditValue.trim() || null });
+      setLinkEditMode(false);
+      setLinkEditValue('');
+    } catch (error) {
+      console.error('Error saving link:', error);
+      window.alert('Failed to save URL. Please try again.');
     } finally {
-      setSavingField(null);
+      setLinkSaving(false);
     }
   };
 
-  // Save desc (description) with explicit Save button
+  const startDescEdit = () => {
+    setDescEditValue(currentNode?.description || '');
+    setDescEditMode(true);
+  };
+
   const saveDesc = async () => {
     if (!activeTab) return;
     setDescSaving(true);
     try {
-      const response = await fetch(`/api/nodes/${activeTab}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: descEditValue }),
-      });
-      if (!response.ok) throw new Error('Failed to save');
-      const result = await response.json();
-      if (result.node) {
-        setNodesData(prev => ({ ...prev, [activeTab]: result.node }));
-      }
+      await updateNode(activeTab, { description: descEditValue });
       setDescEditMode(false);
       setDescEditValue('');
-    } catch (e) {
-      console.error('Error saving description:', e);
-      alert('Failed to save description. Please try again.');
+    } catch (error) {
+      console.error('Error saving description:', error);
+      window.alert('Failed to save description. Please try again.');
     } finally {
       setDescSaving(false);
     }
   };
 
-  // Cancel desc editing
-  const cancelDescEdit = () => {
-    setDescEditMode(false);
-    setDescEditValue('');
-  };
-
-  // Start editing desc
-  const startDescEdit = () => {
-    if (!activeTab || !nodesData[activeTab]) return;
-    setDescEditValue(nodesData[activeTab].description || '');
-    setDescEditMode(true);
-  };
-
-  // Sync description to source and re-embed
-  const syncDescToSource = async () => {
-    if (!activeTab) return;
-    setDescSaving(true);
-    try {
-      // Save description to source field
-      const response = await fetch(`/api/nodes/${activeTab}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: descEditValue }),
-      });
-      if (!response.ok) throw new Error('Failed to sync');
-      const result = await response.json();
-      if (result.node) {
-        setNodesData(prev => ({ ...prev, [activeTab]: result.node }));
-      }
-
-      // Trigger re-embedding
-      await fetch('/api/ingestion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId: activeTab }),
-      });
-
-      // Refresh chunks data
-      fetchChunksData(activeTab);
-
-      alert('Description synced to source and re-embedded successfully.');
-    } catch (e) {
-      console.error('Error syncing description to source:', e);
-      alert('Failed to sync to source. Please try again.');
-    } finally {
-      setDescSaving(false);
-    }
-  };
-
-  // Save notes-tab content into canonical source
-  const saveNotes = async () => {
-    if (!activeTab) return;
-    setNotesSaving(true);
-    try {
-      const response = await fetch(`/api/nodes/${activeTab}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: notesEditValue }),
-      });
-      if (!response.ok) throw new Error('Failed to save');
-      const result = await response.json();
-      if (result.node) {
-        setNodesData(prev => ({ ...prev, [activeTab]: result.node }));
-      }
-      // Ensure edges for any node tokens
-      try {
-        const tokens = parseNodeMarkers(notesEditValue);
-        const uniqueTargets = Array.from(new Set(tokens.map(t => t.id))).filter(id => id !== activeTab);
-        await Promise.allSettled(uniqueTargets.map(async (toId) => {
-          await fetch('/api/edges', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from_node_id: activeTab,
-              to_node_id: toId,
-              source: 'user',
-              explanation: 'Referenced via @ mention'
-            })
-          });
-        }));
-        await fetchEdgesData(activeTab);
-      } catch (e) {
-        console.warn('Failed to ensure edges from tokens:', e);
-      }
-      setNotesEditMode(false);
-      setNotesEditValue('');
-    } catch (e) {
-      console.error('Error saving source content:', e);
-      alert('Failed to save content. Please try again.');
-    } finally {
-      setNotesSaving(false);
-    }
-  };
-
-  // Cancel notes editing
-  const cancelNotesEdit = () => {
-    setNotesEditMode(false);
-    setNotesEditValue('');
-  };
-
-  // Start editing notes
-  const startNotesEdit = () => {
-    if (!activeTab || !nodesData[activeTab]) return;
-    setNotesEditValue(nodesData[activeTab].source || nodesData[activeTab].notes || '');
-    setNotesEditMode(true);
-  };
-
-  // Save source with explicit Save button
-  const saveSource = async () => {
-    if (!activeTab) return;
-    setSourceSaving(true);
-    try {
-      const response = await fetch(`/api/nodes/${activeTab}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: sourceEditValue }),
-      });
-      if (!response.ok) throw new Error('Failed to save');
-      const result = await response.json();
-      if (result.node) {
-        setNodesData(prev => ({ ...prev, [activeTab]: result.node }));
-      }
-      setSourceEditMode(false);
-      setSourceEditValue('');
-    } catch (e) {
-      console.error('Error saving source:', e);
-      alert('Failed to save source. Please try again.');
-    } finally {
-      setSourceSaving(false);
-    }
-  };
-
-  // Cancel source editing
-  const cancelSourceEdit = () => {
-    setSourceEditMode(false);
-    setSourceEditValue('');
-  };
-
-  // Start editing source
-  const startSourceEdit = () => {
-    if (!activeTab || !nodesData[activeTab]) return;
-    setSourceEditValue(nodesData[activeTab].source || nodesData[activeTab].chunk || '');
-    setSourceEditMode(true);
-  };
-
-  // Sync Notes content to Source (with confirmation)
-  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-
-  // Create linked note state
-  const [creatingNote, setCreatingNote] = useState(false);
-
-  const syncToSource = async () => {
-    if (!activeTab) return;
-    setSyncing(true);
-    setShowSyncConfirm(false);
-    try {
-      // First, save notes content to source field
-      const response = await fetch(`/api/nodes/${activeTab}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: notesEditValue }),
-      });
-      if (!response.ok) throw new Error('Failed to sync');
-      const result = await response.json();
-      if (result.node) {
-        setNodesData(prev => ({ ...prev, [activeTab]: result.node }));
-      }
-
-      // Then trigger re-embedding
-      await fetch('/api/ingestion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId: activeTab }),
-      });
-
-      // Refresh chunks data
-      fetchChunksData(activeTab);
-
-      // Stay in edit mode but show success
-      alert('Content synced to source and re-embedded successfully.');
-    } catch (e) {
-      console.error('Error syncing to source:', e);
-      alert('Failed to sync to source. Please try again.');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // Create a new linked note from current node
-  const createLinkedNote = async () => {
-    if (!activeTab || !nodesData[activeTab]) return;
-    setCreatingNote(true);
-
-    const sourceNodeId = activeTab;
-    const currentNode = nodesData[sourceNodeId];
-    let newNodeId: number | null = null;
-
-    try {
-      const noteTitle = `New Node from ${currentNode.title}`;
-      const noteDescription = `New node - ideas or insights from ${currentNode.title}`;
-
-      // Create the new node
-      const createResponse = await fetch('/api/nodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: noteTitle,
-          type: 'note',
-          content: '',
-          description: noteDescription,
-          dimensions: currentNode.dimensions || []
-        }),
-      });
-
-      if (!createResponse.ok) throw new Error('Failed to create note');
-      const createResult = await createResponse.json();
-      newNodeId = createResult.data?.id || createResult.node?.id || createResult.id;
-
-      if (!newNodeId) throw new Error('No node ID returned');
-
-      // Create edge from new note to source node
-      const edgeResponse = await fetch('/api/edges', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from_node_id: newNodeId,
-          to_node_id: sourceNodeId,
-          source: 'user',
-          explanation: `Ideas or insights from "${currentNode.title}"`
-        }),
-      });
-
-      if (!edgeResponse.ok) {
-        console.warn('Edge creation failed but note was created');
-      }
-
-      // Open the new note in focus
-      if (onTabSelect && newNodeId) {
-        onTabSelect(newNodeId);
-      }
-    } catch (e) {
-      console.error('Error creating linked note:', e);
-      // If node was created but something else failed, still open it
-      if (newNodeId && onTabSelect) {
-        onTabSelect(newNodeId);
-      } else {
-        alert('Failed to create note. Please try again.');
-      }
-    } finally {
-      setCreatingNote(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      saveField();
-    } else if (e.key === 'Escape') {
-      cancelEdit();
-    }
-  };
-
-  const handleBlur = () => {
-    // If mention is active, defer saving slightly to avoid race with selection
-    const attemptSave = () => {
-      if (editingField) {
-        saveField();
-      }
-    };
-    if (mentionActive) {
-      setTimeout(() => {
-        if (!mentionActive) attemptSave();
-      }, 220);
-      return;
-    }
-    // Small delay to allow for clicking inline buttons
-    setTimeout(attemptSave, 150);
-  };
-
-  // Regenerate description for a node
   const regenerateDescription = async (nodeId: number) => {
     setRegeneratingDescription(nodeId);
     try {
       const response = await fetch(`/api/nodes/${nodeId}/regenerate-description`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {
@@ -786,328 +284,66 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       }
     } catch (error) {
       console.error('Error regenerating description:', error);
-      alert('Failed to regenerate description. Please try again.');
+      window.alert('Failed to regenerate description. Please try again.');
     } finally {
       setRegeneratingDescription(null);
     }
   };
 
-  // --- @mention state ---
-  const [mentionActive, setMentionActive] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState('');
-  const [mentionResults, setMentionResults] = useState<NodeSearchResult[]>([]);
-  const [mentionIndex, setMentionIndex] = useState(0);
-  const mentionTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const resetMention = () => {
-    setMentionActive(false);
-    setMentionQuery('');
-    setMentionResults([]);
-    setMentionIndex(0);
+  const startSourceEdit = () => {
+    setSourceEditValue(currentNode?.source || currentNode?.chunk || '');
+    setSourceEditMode(true);
   };
 
-  const findAtTrigger = (text: string, caret: number): { atIndex: number; query: string } | null => {
-    // Find last '@' before caret that is at start or preceded by whitespace
-    for (let i = caret - 1; i >= 0; i--) {
-      const ch = text[i];
-      if (ch === '@') {
-        const prev = i === 0 ? ' ' : text[i - 1];
-        if (/\s/.test(prev)) {
-          const span = text.slice(i + 1, caret);
-          // Stop if span contains disallowed characters (newline or punctuation other than - _ .)
-          if (/[^A-Za-z0-9 _\-.]/.test(span)) return null;
-          return { atIndex: i, query: span };
-        }
-        // If '@' is not preceded by whitespace, keep scanning left
-      }
-      // Stop scanning back on whitespace/newline to avoid spanning words
-      if (ch === '\n') break;
-    }
-    return null;
-  };
-
-  const runMentionSearch = async (query: string) => {
+  const saveSource = async () => {
     if (!activeTab) return;
-    if (query.trim().length < 2) {
-      setMentionResults([]);
-      return;
-    }
+    setSourceSaving(true);
     try {
-      const resp = await fetch(`/api/nodes/search?q=${encodeURIComponent(query)}&limit=10`);
-      const payload = (await resp.json()) as { success: boolean; data: NodeSearchResult[] };
-      if (payload?.success && Array.isArray(payload.data)) {
-        const filtered = payload.data
-          .filter((n) => n.id !== activeTab)
-          .map((n) => ({ ...n, dimensions: n.dimensions ?? [] }));
-        setMentionResults(filtered);
-        setMentionIndex(0);
-      }
+      await updateNode(activeTab, { source: sourceEditValue });
+      setSourceEditMode(false);
+      setSourceEditValue('');
     } catch (error) {
-      console.warn('mention search failed:', error);
-      setMentionResults([]);
+      console.error('Error saving source:', error);
+      window.alert('Failed to save source. Please try again.');
+    } finally {
+      setSourceSaving(false);
     }
-  };
-
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setEditingValue(val);
-
-    // Detect @mention
-    const caret = e.target.selectionStart || val.length;
-    const trig = findAtTrigger(val, caret);
-    if (trig) {
-      setMentionActive(true);
-      setMentionQuery(trig.query);
-      if (mentionTimeout.current) clearTimeout(mentionTimeout.current);
-      mentionTimeout.current = setTimeout(() => runMentionSearch(trig.query), 280);
-    } else if (mentionActive) {
-      // Exit mention mode if trigger no longer valid
-      resetMention();
-    }
-  };
-
-  const replaceMentionWithToken = async (nodeId: number, title: string) => {
-    if (!inputRef.current || !(inputRef.current instanceof HTMLTextAreaElement)) return;
-    if (activeNodeId === null) return;
-    const ta = inputRef.current as HTMLTextAreaElement;
-    const sourceNodeId = activeNodeId!;
-    const text = editingValue;
-    const caret = ta.selectionStart || text.length;
-    let trig = findAtTrigger(text, caret);
-    if (!trig) {
-      // Fallback: try to locate the last occurrence of the current mention token
-      if (mentionQuery && mentionQuery.length > 0) {
-        const needle = '@' + mentionQuery;
-        const idx = text.lastIndexOf(needle);
-        if (idx !== -1) {
-          trig = { atIndex: idx, query: mentionQuery };
-        }
-      }
-      if (!trig) return;
-    }
-    // Build quote-safe token
-    const quoteTitleForToken = (t: string): string => {
-      if (t.includes('"')) {
-        // Wrap with single quotes; normalize inner straight single quotes
-        const norm = t.replace(/'/g, '’');
-        return `'${norm}'`;
-      }
-      // Wrap with double quotes; keep title as-is (no straight doubles inside)
-      return `"${t}"`;
-    };
-    const token = `[NODE:${nodeId}:${quoteTitleForToken(title)}]`;
-    const before = text.slice(0, trig.atIndex);
-    const after = text.slice(trig.atIndex + 1 + trig.query.length); // skip '@' and query
-    const newVal = before + token + after;
-    setEditingValue(newVal);
-    // Restore caret after token
-    const newCaret = (before + token).length;
-    requestAnimationFrame(() => {
-      ta.selectionStart = ta.selectionEnd = newCaret;
-      ta.focus();
-    });
-
-    // Create edge (idempotent server-side)
-    if (sourceNodeId) {
-      try {
-        await fetch('/api/edges', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from_node_id: sourceNodeId,
-            to_node_id: nodeId,
-            source: 'user',
-              explanation: 'Referenced via @ mention'
-          })
-        });
-      } catch (e) {
-        console.warn('edge create failed for mention:', e);
-      }
-    }
-
-    resetMention();
-
-    // Persist content immediately to avoid losing the token on refresh/navigation
-    try {
-      await saveContentExplicit(newVal, sourceNodeId);
-    } catch (e) {
-      console.warn('auto-save after mention failed:', e);
-    }
-  };
-
-  // Handle @mention selection in the Notes tab
-  const handleNotesMentionSelect = async (nodeId: number, title: string) => {
-    if (!notesTextareaRef.current || activeNodeId === null) return;
-    const ta = notesTextareaRef.current;
-    const sourceNodeId = activeNodeId;
-    const text = notesEditValue;
-    const caret = ta.selectionStart || text.length;
-    let trig = findAtTrigger(text, caret);
-    if (!trig) {
-      // Fallback: try to locate the last occurrence of the current mention token
-      if (mentionQuery && mentionQuery.length > 0) {
-        const needle = '@' + mentionQuery;
-        const idx = text.lastIndexOf(needle);
-        if (idx !== -1) {
-          trig = { atIndex: idx, query: mentionQuery };
-        }
-      }
-      if (!trig) return;
-    }
-    // Build quote-safe token
-    const quoteTitleForToken = (t: string): string => {
-      if (t.includes('"')) {
-        const norm = t.replace(/'/g, '\u2019'); // curly right single quote
-        return `'${norm}'`;
-      }
-      return `"${t}"`;
-    };
-    const token = `[NODE:${nodeId}:${quoteTitleForToken(title)}]`;
-    const before = text.slice(0, trig.atIndex);
-    const after = text.slice(trig.atIndex + 1 + trig.query.length);
-    const newVal = before + token + after;
-    setNotesEditValue(newVal);
-    // Restore caret after token
-    const newCaret = (before + token).length;
-    requestAnimationFrame(() => {
-      ta.selectionStart = ta.selectionEnd = newCaret;
-      ta.focus();
-    });
-
-    // Create edge
-    if (sourceNodeId) {
-      try {
-        await fetch('/api/edges', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from_node_id: sourceNodeId,
-            to_node_id: nodeId,
-            source: 'user',
-            explanation: 'Referenced via @ mention'
-          })
-        });
-        // Refresh edges for the current node
-        fetchEdgesData(sourceNodeId);
-      } catch (e) {
-        console.warn('edge create failed for notes mention:', e);
-      }
-    }
-
-    resetMention();
   };
 
   const embedContent = async (nodeId: number) => {
-    const node = nodesData[nodeId];
-    const hasNotes = node?.notes?.trim();
-    const hasSource = (node?.source || node?.chunk)?.trim();
-    // If source is empty but notes exist, auto-populate source from notes
-    if (!hasSource && hasNotes) {
-      try {
-        const response = await fetch(`/api/nodes/${nodeId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: hasNotes })
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          if (result.node) {
-            setNodesData(prev => ({ ...prev, [nodeId]: result.node }));
-          }
-        }
-      } catch (error) {
-        console.error('Failed to auto-populate source for embedding:', error);
-        return;
-      }
-    }
-    // If neither notes nor source exist, require notes
-    if (!hasNotes && !hasSource) {
-      startEdit('notes', '');
-      return;
-    }
     setEmbeddingNode(nodeId);
     try {
       const response = await fetch('/api/ingestion', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodeId }),
       });
 
       const result = await response.json();
-      
       if (!response.ok) {
         throw new Error(result.error || 'Failed to embed content');
       }
 
-      // Show result details
-      const nodeStatus = result.node_embedding?.status;
-      const chunkStatus = result.chunk_embeddings?.status;
-      const chunksCreated = result.chunk_embeddings?.chunks_created || 0;
-      
-      let message = 'Embedding complete:\n';
-      if (nodeStatus === 'completed') message += '✓ Node metadata embedded\n';
-      if (chunkStatus === 'completed') message += `✓ ${chunksCreated} chunks embedded\n`;
-      if (chunkStatus === 'skipped') message += '• No chunk content to embed\n';
-      
-      console.log(message.trim());
-
-      // Refresh node data to get updated status
       await fetchNodeData(nodeId);
-      
     } catch (error) {
       console.error('Error embedding content:', error);
-      alert(`Failed to embed content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      window.alert(`Failed to embed content: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setEmbeddingNode(null);
     }
   };
 
-
-  // Edge management functions (following same patterns as node functions)
-
-  const handleEdgeNodeSelect = async (targetNodeId: number, _targetNodeTitle?: string) => {
-    // Immediately create edge - backend auto-infers explanation and type
-    await createEdgeAuto(targetNodeId);
-  };
-
-  // Handle node search keyboard navigation
-  const handleNodeSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedSearchIndex(prev => Math.min(prev + 1, nodeSearchSuggestions.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedSearchIndex(prev => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter' && nodeSearchSuggestions[selectedSearchIndex]) {
-      e.preventDefault();
-      handleSelectNodeSuggestion(nodeSearchSuggestions[selectedSearchIndex]);
-    }
-  };
-
-  const handleSelectNodeSuggestion = async (suggestion: NodeSearchResult) => {
-    // Immediately create edge - backend auto-infers explanation and type
-    await createEdgeAuto(suggestion.id);
-    setNodeSearchSuggestions([]);
-    setNodeSearchQuery('');
-  };
-
-  // Auto-create edge - backend handles explanation generation and type inference
   const createEdgeAuto = async (targetNodeId: number) => {
-    if (activeNodeId === null) return;
+    if (activeTab === null) return;
     try {
       const response = await fetch('/api/edges', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from_node_id: activeNodeId,
+          from_node_id: activeTab,
           to_node_id: targetNodeId,
           source: 'user',
-          explanation: '' // Empty - backend will auto-generate
+          explanation: '',
         }),
       });
 
@@ -1115,34 +351,25 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
         throw new Error('Failed to create edge');
       }
 
-      // Refresh edges data
-      await fetchEdgesData(activeNodeId);
-
-      // Reset state
-      setAddingEdge(null);
-      setEdgeExplanation('');
-      setPendingEdgeTarget(null);
-
+      await fetchEdgesData(activeTab);
     } catch (error) {
       console.error('Error creating edge:', error);
-      alert('Failed to create edge. Please try again.');
+      window.alert('Failed to create connection. Please try again.');
+      throw error;
     }
   };
 
-  // Legacy function for manual explanation (kept for compatibility)
   const createEdgeWithExplanation = async (targetNodeId: number, explanation: string) => {
-    if (activeNodeId === null) return;
+    if (activeTab === null) return;
     try {
       const response = await fetch('/api/edges', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from_node_id: activeNodeId,
+          from_node_id: activeTab,
           to_node_id: targetNodeId,
           source: 'user',
-          explanation: explanation || '' // Backend handles empty
+          explanation: explanation || '',
         }),
       });
 
@@ -1150,24 +377,15 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
         throw new Error('Failed to create edge');
       }
 
-      // Refresh edges data
-      await fetchEdgesData(activeNodeId);
-
-      // Reset state
-      setAddingEdge(null);
-      setEdgeExplanation('');
-      setPendingEdgeTarget(null);
-      setNodeSearchQuery('');
-      setNodeSearchSuggestions([]);
-
+      await fetchEdgesData(activeTab);
     } catch (error) {
       console.error('Error creating edge:', error);
-      alert('Failed to create edge. Please try again.');
+      window.alert('Failed to create connection. Please try again.');
+      throw error;
     }
   };
 
-  const startEditEdgeExplanation = (edgeId: number, currentExplanation: string | undefined) => {
-    if (edgeSavingId) return;
+  const startEditEdgeExplanation = (edgeId: number, currentExplanation?: string) => {
     setEdgeEditingId(edgeId);
     setEdgeEditingValue(currentExplanation || '');
   };
@@ -1181,379 +399,60 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     edgeId: number,
     currentContext: Record<string, unknown> | null | undefined
   ) => {
-    if (activeNodeId === null) return;
+    if (activeTab === null) return;
     setEdgeSavingId(edgeId);
     try {
-      const newContext: Record<string, unknown> = {
-        ...(currentContext ?? {}),
-        explanation: edgeEditingValue
-      };
       const response = await fetch(`/api/edges/${edgeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context: newContext })
+        body: JSON.stringify({
+          context: {
+            ...(currentContext ?? {}),
+            explanation: edgeEditingValue,
+          },
+        }),
       });
-      if (!response.ok) throw new Error('Failed to update edge');
-      await fetchEdgesData(activeNodeId);
-      setEdgeEditingId(null);
-      setEdgeEditingValue('');
-    } catch (e) {
-      console.error('Failed updating edge explanation:', e);
-      alert('Failed to update edge explanation');
+
+      if (!response.ok) {
+        throw new Error('Failed to update edge');
+      }
+
+      await fetchEdgesData(activeTab);
+      cancelEditEdgeExplanation();
+    } catch (error) {
+      console.error('Failed updating edge explanation:', error);
+      window.alert('Failed to update connection explanation.');
     } finally {
       setEdgeSavingId(null);
     }
   };
 
   const deleteEdge = async (edgeId: number) => {
-    if (activeNodeId === null) return;
+    if (activeTab === null) return;
     setDeletingEdge(edgeId);
     try {
       const response = await fetch(`/api/edges/${edgeId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
 
       if (!response.ok) {
         throw new Error('Failed to delete edge');
       }
 
-      await fetchEdgesData(activeNodeId);
-      
+      await fetchEdgesData(activeTab);
     } catch (error) {
       console.error('Error deleting edge:', error);
-      alert('Failed to delete edge. Please try again.');
+      window.alert('Failed to delete connection. Please try again.');
     } finally {
       setDeletingEdge(null);
     }
-  };
-
-  const renderConnectionsBody = () => {
-    if (!activeTab) {
-      return <div style={{ color: 'var(--rah-text-muted)', fontSize: '12px' }}>Open a node to manage connections.</div>;
-    }
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Search Section — only visible when toggled */}
-        {edgeSearchOpen && (
-          <div style={{ marginBottom: '12px', position: 'relative' }}>
-            <input
-              type="text"
-              autoFocus
-              value={nodeSearchQuery}
-              onChange={(e) => setNodeSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setEdgeSearchOpen(false);
-                  setNodeSearchQuery('');
-                  setNodeSearchSuggestions([]);
-                } else {
-                  handleNodeSearchKeyDown(e);
-                }
-              }}
-              placeholder="Search for a node to connect..."
-              style={{
-                width: '100%',
-                background: 'var(--rah-bg-surface)',
-                border: '1px solid var(--rah-border-strong)',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                color: 'var(--rah-text-base)',
-                fontSize: '12px',
-                fontFamily: 'inherit',
-                outline: 'none',
-              }}
-            />
-            {/* Search Suggestions */}
-            {nodeSearchSuggestions.length > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                marginTop: '4px',
-                background: 'var(--rah-bg-panel)',
-                border: '1px solid var(--rah-border-strong)',
-                borderRadius: '8px',
-                maxHeight: '200px',
-                overflowY: 'auto',
-                zIndex: 100,
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
-              }}>
-                {nodeSearchSuggestions.map((suggestion, index) => (
-                  <div
-                    key={suggestion.id}
-                    onClick={() => {
-                      handleSelectNodeSuggestion(suggestion);
-                      setNodeSearchQuery('');
-                      setNodeSearchSuggestions([]);
-                      setEdgeSearchOpen(false);
-                    }}
-                    style={{
-                      padding: '8px 12px',
-                      cursor: 'pointer',
-                      borderBottom: index < nodeSearchSuggestions.length - 1 ? '1px solid var(--rah-border)' : 'none',
-                      background: index === selectedSearchIndex ? 'var(--rah-bg-active)' : 'transparent',
-                      transition: 'background 100ms ease',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--rah-bg-active)'; }}
-                    onMouseLeave={(e) => { if (index !== selectedSearchIndex) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    <span style={{
-                      fontSize: '9px',
-                      fontWeight: 600,
-                      color: 'var(--rah-text-inverse)',
-                      background: 'var(--rah-accent-green)',
-                      padding: '2px 5px',
-                      borderRadius: '4px',
-                      flexShrink: 0,
-                      fontFamily: "'SF Mono', 'Fira Code', monospace",
-                    }}>
-                      {suggestion.id}
-                    </span>
-                    <span style={{
-                      fontSize: '12px',
-                      color: 'var(--rah-text-base)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      flex: 1,
-                    }}>
-                      {suggestion.title}
-                    </span>
-                    {index === selectedSearchIndex && (
-                      <span style={{ color: 'var(--rah-text-muted)', fontSize: '12px' }}>↵</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Connections list */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {loadingEdges.has(activeTab) ? (
-            <div style={{ color: 'var(--rah-text-muted)', fontSize: '12px', fontStyle: 'italic', padding: '8px 0' }}>Loading connections…</div>
-          ) : (() => {
-            const list = edgesData[activeTab] || [];
-            if (list.length === 0) {
-              return <div style={{ color: 'var(--rah-text-muted)', fontSize: '12px', fontStyle: 'italic', padding: '16px 0', textAlign: 'center' }}>No connections yet.</div>;
-            }
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {list.map((connection) => (
-                  <div
-                    key={connection.id}
-                    style={{
-                      padding: '6px 0',
-                      borderBottom: '1px solid var(--rah-border)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '2px',
-                      minWidth: 0,
-                    }}
-                  >
-                    {/* Row 1: arrow + ID + title + delete */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                      <span style={{
-                        fontSize: '11px',
-                        color: connection.edge.from_node_id === activeTab ? 'var(--rah-accent-green)' : '#f59e0b',
-                        fontWeight: 600,
-                        width: '14px',
-                        textAlign: 'center',
-                        flexShrink: 0,
-                      }}>
-                        {connection.edge.from_node_id === activeTab ? '→' : '←'}
-                      </span>
-                      <span style={{
-                        fontSize: '9px',
-                        fontWeight: 700,
-                        color: 'var(--rah-text-inverse)',
-                        background: 'var(--rah-accent-green)',
-                        padding: '1px 5px',
-                        borderRadius: '4px',
-                        flexShrink: 0,
-                        fontFamily: "'SF Mono', 'Fira Code', monospace",
-                      }}>
-                        {connection.connected_node.id}
-                      </span>
-                      <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                        {getNodeIcon(connection.connected_node, dimensionIcons, 12)}
-                      </span>
-                      <span
-                        onClick={() => onNodeClick?.(connection.connected_node.id)}
-                        style={{
-                          fontSize: '12px',
-                          color: 'var(--rah-text-base)',
-                          fontWeight: 500,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          flex: 1,
-                          minWidth: 0,
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--rah-accent-green)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--rah-text-base)'; }}
-                      >
-                        {connection.connected_node.title}
-                      </span>
-                      <button
-                        onClick={() => deleteEdge(connection.edge.id)}
-                        disabled={deletingEdge === connection.edge.id}
-                        style={{
-                          color: 'var(--rah-text-muted)',
-                          fontSize: '14px',
-                          background: 'transparent',
-                          border: 'none',
-                          cursor: deletingEdge === connection.edge.id ? 'not-allowed' : 'pointer',
-                          padding: '0 2px',
-                          flexShrink: 0,
-                          lineHeight: 1,
-                        }}
-                        onMouseEnter={(e) => { if (deletingEdge !== connection.edge.id) e.currentTarget.style.color = '#dc2626'; }}
-                        onMouseLeave={(e) => { if (deletingEdge !== connection.edge.id) e.currentTarget.style.color = 'var(--rah-text-muted)'; }}
-                      >
-                        {deletingEdge === connection.edge.id ? '...' : '×'}
-                      </button>
-                    </div>
-                    {/* Row 2: type chip + explanation (compact, single line) */}
-                    {edgeEditingId === connection.edge.id ? (
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '20px' }}>
-                        <input
-                          value={edgeEditingValue}
-                          onChange={(e) => setEdgeEditingValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              saveEdgeExplanation(connection.edge.id, connection.edge.context);
-                            } else if (e.key === 'Escape') {
-                              e.preventDefault();
-                              cancelEditEdgeExplanation();
-                            }
-                          }}
-                          style={{
-                            flex: 1,
-                            fontSize: '11px',
-                            color: 'var(--rah-text-base)',
-                            background: 'var(--rah-bg-surface)',
-                            border: '1px solid var(--rah-border-strong)',
-                            borderRadius: '4px',
-                            padding: '3px 6px',
-                            outline: 'none',
-                            fontFamily: 'inherit',
-                            minWidth: 0,
-                          }}
-                          placeholder="Add explanation…"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => saveEdgeExplanation(connection.edge.id, connection.edge.context)}
-                          disabled={edgeSavingId === connection.edge.id}
-                          style={{
-                            fontSize: '10px',
-                            color: 'var(--rah-text-inverse)',
-                            background: 'var(--rah-accent-green)',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '3px 8px',
-                            cursor: edgeSavingId === connection.edge.id ? 'not-allowed' : 'pointer',
-                            fontWeight: 600,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {edgeSavingId === connection.edge.id ? '...' : 'Save'}
-                        </button>
-                        <button
-                          onClick={cancelEditEdgeExplanation}
-                          style={{
-                            fontSize: '10px',
-                            color: 'var(--rah-text-muted)',
-                            background: 'transparent',
-                            border: 'none',
-                            padding: '3px 4px',
-                            cursor: 'pointer',
-                            flexShrink: 0,
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div
-                        onClick={() => startEditEdgeExplanation(connection.edge.id, connection.edge.context?.explanation)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          paddingLeft: '20px',
-                          cursor: 'pointer',
-                          minWidth: 0,
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
-                      >
-                        {typeof connection.edge.context?.type === 'string' && (
-                          <span style={{
-                            fontSize: '9px',
-                            color: 'var(--rah-text-soft)',
-                            background: 'var(--rah-bg-active)',
-                            border: '1px solid var(--rah-border)',
-                            padding: '1px 5px',
-                            borderRadius: '999px',
-                            flexShrink: 0,
-                            whiteSpace: 'nowrap',
-                          }}>
-                            {String(connection.edge.context.type).replace(/_/g, ' ')}
-                          </span>
-                        )}
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: connection.edge.context?.explanation ? 'var(--rah-text-muted)' : 'var(--rah-text-soft)',
-                            fontStyle: connection.edge.context?.explanation ? 'normal' : 'italic',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            flex: 1,
-                            minWidth: 0,
-                          }}
-                          title={String(connection.edge.context?.explanation || '')}
-                        >
-                          {(connection.edge.context?.explanation as string) || 'Add explanation...'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-        </div>
-      </div>
-    );
-  };
-
-  const handleConfirmNodeDelete = () => {
-    if (pendingDeleteNodeId === null) return;
-    executeDeleteNode(pendingDeleteNodeId);
-    setPendingDeleteNodeId(null);
-  };
-
-  const handleCancelNodeDelete = () => {
-    setPendingDeleteNodeId(null);
   };
 
   const executeDeleteNode = async (nodeId: number) => {
     setDeletingNode(nodeId);
     try {
       const response = await fetch(`/api/nodes/${nodeId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
 
       if (!response.ok) {
@@ -1562,1519 +461,978 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
 
       onTabClose(nodeId);
       setNodesData(prev => {
-        const newData = { ...prev };
-        delete newData[nodeId];
-        return newData;
+        const next = { ...prev };
+        delete next[nodeId];
+        return next;
       });
-      
     } catch (error) {
       console.error('Error deleting node:', error);
-      alert('Failed to delete node. Please try again.');
+      window.alert('Failed to delete node. Please try again.');
     } finally {
       setDeletingNode(null);
     }
   };
 
-  const confirmDeleteNode = (nodeId: number) => {
-    setPendingDeleteNodeId(nodeId);
+  const renderStatusIndicator = () => {
+    if (!currentNode || activeTab === null) return null;
+
+    const chunkStatus = currentNode.chunk_status ?? null;
+    if (embeddingNode === activeTab || chunkStatus === 'chunking') {
+      return <Loader size={12} className="animate-spin" style={{ color: '#facc15', flexShrink: 0 }} />;
+    }
+
+    if (chunkStatus === 'error') {
+      return (
+        <button
+          onClick={() => void embedContent(activeTab)}
+          className="status-button"
+          title="Embedding failed - click to retry"
+        >
+          <Database size={10} />
+          Retry
+        </button>
+      );
+    }
+
+    if (chunkStatus === 'not_chunked') {
+      return (
+        <span className="status-chip" title="Source changed and is queued for embedding">
+          Pending embed
+        </span>
+      );
+    }
+
+    return null;
+  };
+
+  // ── Shared inline style constants (styled-jsx doesn't apply inside helper fns) ──
+  const S = {
+    section: {
+      display: 'flex' as const,
+      flexDirection: 'column' as const,
+      gap: '10px',
+      paddingTop: '18px',
+      marginTop: '4px',
+    },
+    sectionHeader: {
+      display: 'flex' as const,
+      alignItems: 'center' as const,
+      gap: '10px',
+      marginBottom: '2px',
+    },
+    sectionLabel: {
+      fontSize: '9.5px',
+      letterSpacing: '0.1em',
+      textTransform: 'uppercase' as const,
+      color: 'var(--rah-text-muted)',
+      fontWeight: 600,
+      flexShrink: 0,
+    },
+    sectionRule: {
+      flex: 1,
+      height: '1px',
+      background: 'var(--rah-border)',
+    },
+    iconBtn: {
+      display: 'inline-flex' as const,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      width: '22px',
+      height: '22px',
+      background: 'transparent',
+      border: '1px solid transparent',
+      borderRadius: '5px',
+      color: 'var(--rah-text-muted)',
+      cursor: 'pointer',
+      padding: 0,
+    },
+    editorBlock: {
+      display: 'flex' as const,
+      flexDirection: 'column' as const,
+      gap: '10px',
+    },
+    textarea: {
+      display: 'block' as const,
+      width: '100%',
+      boxSizing: 'border-box' as const,
+      background: 'var(--rah-bg-surface)',
+      border: '1px solid var(--rah-border-strong)',
+      borderRadius: '8px',
+      color: 'var(--rah-text-base)',
+      fontFamily: 'inherit',
+      outline: 'none',
+      padding: '12px',
+    },
+    editorActions: {
+      display: 'flex' as const,
+      justifyContent: 'flex-end' as const,
+      gap: '8px',
+    },
+    primaryBtn: {
+      display: 'inline-flex' as const,
+      alignItems: 'center' as const,
+      gap: '5px',
+      padding: '6px 12px',
+      border: 'none',
+      background: 'var(--rah-accent-green)',
+      color: 'var(--rah-text-inverse)',
+      fontSize: '11px',
+      fontWeight: 600,
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    },
+    secondaryBtn: {
+      display: 'inline-flex' as const,
+      alignItems: 'center' as const,
+      gap: '5px',
+      padding: '6px 12px',
+      border: '1px solid var(--rah-border-strong)',
+      background: 'transparent',
+      color: 'var(--rah-text-soft)',
+      fontSize: '11px',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    },
+  };
+
+  const renderSourceSection = () => {
+    const sourceContent = currentNode?.source || currentNode?.chunk || '';
+
+    return (
+      <section
+        style={S.section}
+        onMouseEnter={() => setHoveredSection('source')}
+        onMouseLeave={() => setHoveredSection(prev => prev === 'source' ? null : prev)}
+      >
+        {/* Section header with extending rule */}
+        <div style={S.sectionHeader}>
+          <span style={S.sectionLabel}>Source</span>
+          <div style={S.sectionRule} />
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', opacity: hoveredSection === 'source' || sourceEditMode ? 1 : 0, transition: 'opacity 150ms ease' }}>
+            {!sourceEditMode && (
+              <button type="button" style={S.iconBtn} onClick={startSourceEdit} title="Edit source">
+                <Pencil size={11} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {sourceEditMode ? (
+          <div style={S.editorBlock}>
+            <SourceEditor
+              value={sourceEditValue}
+              onChange={setSourceEditValue}
+              disabled={sourceSaving}
+            />
+            <div style={S.editorActions}>
+              <button type="button" style={S.secondaryBtn} onClick={() => { setSourceEditMode(false); setSourceEditValue(''); }} disabled={sourceSaving}>
+                <X size={13} /> Cancel
+              </button>
+              <button type="button" style={S.primaryBtn} onClick={() => void saveSource()} disabled={sourceSaving}>
+                {sourceSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Save
+              </button>
+            </div>
+          </div>
+        ) : sourceContent ? (
+          <div style={{ minHeight: '240px' }}>
+            <SourceReader
+              content={sourceContent}
+              onTextSelect={onTextSelect ? (text) => onTextSelect(activeTab!, currentNode?.title || 'Untitled', text) : undefined}
+              highlightedText={highlightedPassage?.nodeId === activeTab ? highlightedPassage.selectedText : null}
+              onContentClick={startSourceEdit}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={startSourceEdit}
+            style={{
+              display: 'block',
+              width: '100%',
+              background: 'transparent',
+              border: '1px dashed var(--rah-border-strong)',
+              borderRadius: '8px',
+              fontFamily: 'inherit',
+              fontSize: '13px',
+              fontStyle: 'italic',
+              color: 'var(--rah-text-muted)',
+              cursor: 'text',
+              padding: '16px',
+              textAlign: 'left',
+            }}
+          >
+            Add source content...
+          </button>
+        )}
+      </section>
+    );
   };
 
   return (
     <>
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'transparent' }}>
-      {/* Tab Bar - hidden when rendered from NodePane which has its own tab bar */}
-      {!hideTabBar && (
-        <div style={{
-          display: 'flex',
-          borderBottom: '1px solid var(--rah-border)',
-          background: 'var(--rah-bg-base)',
-          flexShrink: 0,
-          overflowX: 'auto',
-          overflowY: 'hidden'
-        }}>
-          {openTabs.length === 0 ? (
-            <div style={{
-              padding: '10px 16px',
-              fontSize: '12px',
-              color: 'var(--rah-text-muted)'
-            }}>
-              No tabs open
-            </div>
-          ) : (
-            openTabs.map((tabId) => {
-              const node = nodesData[tabId];
-              const isActive = activeTab === tabId;
-              const label = node ? truncateTitle(node.title || 'Untitled') : 'Loading...';
-
-              return (
-                <div
-                  key={tabId}
-                  draggable
-                  onDragStart={(e) => {
-                    const title = node?.title || 'Untitled';
-                    e.dataTransfer.effectAllowed = 'copyMove';
-                    e.dataTransfer.setData('application/x-rah-tab', JSON.stringify({ id: tabId, title }));
-                    e.dataTransfer.setData('text/plain', `[NODE:${tabId}:"${title}"]`);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, tabId });
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    borderRight: '1px solid var(--rah-border)',
-                    background: isActive ? 'var(--rah-bg-subtle)' : 'var(--rah-bg-base)',
-                    borderBottom: isActive ? '2px solid var(--rah-text-muted)' : 'none',
-                    paddingBottom: isActive ? '0' : '2px',
-                    minWidth: '120px',
-                    maxWidth: '200px',
-                    cursor: 'grab'
-                  }}
-                >
-                  <button
-                    onClick={() => onTabSelect(tabId)}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      fontSize: '12px',
-                      fontFamily: 'inherit',
-                      color: isActive ? 'var(--rah-text-active)' : 'var(--rah-text-soft)',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {label}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTabClose(tabId);
-                    }}
-                    style={{
-                      padding: '4px 8px',
-                      fontSize: '14px',
-                      color: 'var(--rah-text-muted)',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--rah-text-active)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--rah-text-muted)'; }}
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-
-      {/* Content Area */}
-      <div style={{ 
-        flex: 1, 
-        overflow: 'auto',
-        padding: '20px',
-        position: 'relative'
-      }}>
+      <div className="focus-panel">
         {!activeTab ? (
-          <div style={{
-            color: 'var(--rah-text-muted)',
-            fontSize: '13px',
-            textAlign: 'center',
-            marginTop: '40px'
-          }}>
-            Select a node from the left panel to view details
-          </div>
+          <div className="empty-state">Select a node from the left panel to view details</div>
         ) : loadingNodes.has(activeTab) ? (
-          <div style={{
-            color: 'var(--rah-text-muted)',
-            fontSize: '13px'
-          }}>
-            Loading...
-          </div>
+          <div className="empty-state">Loading...</div>
         ) : !currentNode ? (
-          <div style={{ color: 'var(--rah-text-muted)', fontSize: '13px' }}>Node not found.</div>
-        ) : nodesData[activeTab] ? (
-          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* URL Row - Above Title */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '8px',
-              paddingLeft: '4px'
-            }}>
-              {/* Embedding status - only show when embedding or error */}
-              {(() => {
-                const node = nodesData[activeTab];
-                const chunkStatus = node?.chunk_status ?? null;
+          <div className="empty-state">Node not found.</div>
+        ) : (
+          <div className="document-view">
 
-                if (embeddingNode === activeTab || chunkStatus === 'chunking') {
-                  return (
-                    <Loader size={12} className="animate-spin" style={{ color: '#facc15', flexShrink: 0 }} />
-                  );
-                }
-
-                if (chunkStatus === 'error') {
-                  return (
-                    <button
-                      onClick={() => embedContent(activeTab)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '2px 6px',
-                        fontSize: '10px',
-                        color: '#ef4444',
-                        background: 'transparent',
-                        border: '1px solid #7f1d1d',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        flexShrink: 0
-                      }}
-                      title="Embedding failed - click to retry"
-                    >
-                      <Database size={10} />
-                      Retry
-                    </button>
-                  );
-                }
-
-                return null;
-              })()}
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {editingField === 'link' ? (
-                  <input
-                    ref={inputRef as React.RefObject<HTMLInputElement>}
-                    type="url"
-                    value={editingValue}
-                    onChange={(e) => setEditingValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onBlur={handleBlur}
-                    disabled={savingField === 'link'}
-                    style={{
-                      color: '#3b82f6',
-                      fontSize: '11px',
-                      background: 'transparent',
-                      border: '1px solid var(--rah-border)',
-                      borderRadius: '4px',
-                      padding: '4px 6px',
-                      fontFamily: 'inherit',
-                      width: '100%',
-                      outline: 'none'
-                    }}
-                    placeholder="Enter URL..."
-                  />
-                ) : nodesData[activeTab].link ? (
-                  <a
-                    href={nodesData[activeTab].link}
-                    onClick={(e) => {
-                      if (e.metaKey || e.ctrlKey) {
-                        e.preventDefault();
-                        startEdit('link', nodesData[activeTab].link || '');
-                        return;
-                      }
-
-                      const link = nodesData[activeTab].link || '';
-                      if (!shouldOpenExternally(link)) {
-                        return;
-                      }
-
-                      e.preventDefault();
-                      void openExternalUrl(link).catch((error) => {
-                        console.error('[FocusPanel] Failed to open node link', error);
-                        window.alert(`Unable to open ${link}`);
-                      });
-                    }}
-                    style={{
-                      color: '#3b82f6',
-                      fontSize: '11px',
-                      textDecoration: 'none',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: 'block'
-                    }}
-                    title={`${nodesData[activeTab].link} (Cmd+Click to edit)`}
-                  >
-                    {nodesData[activeTab].link}
-                  </a>
-                ) : (
-                  <span
-                    onClick={() => startEdit('link', '')}
-                    style={{
-                      color: '#555',
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                      fontStyle: 'italic'
-                    }}
-                  >
-                    Click to add URL
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Title Row - Node ID, Title, Connections, Trash */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '8px'
-            }}>
-              {/* Node ID - Draggable */}
-              <span
-                draggable
-                onDragStart={(e: DragEvent<HTMLSpanElement>) => {
-                  const title = nodesData[activeTab]?.title || 'Untitled';
-                  e.dataTransfer.effectAllowed = 'copyMove';
-                  e.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: activeTab, title }));
-                  e.dataTransfer.setData('application/node-info', JSON.stringify({ id: activeTab, title, dimensions: nodesData[activeTab]?.dimensions || [] }));
-                  e.dataTransfer.setData('text/plain', `[NODE:${activeTab}:"${title}"]`);
-                }}
-                style={{
-                  display: 'inline-block',
-                  background: 'var(--rah-accent-green)',
-                  color: 'var(--rah-text-inverse)',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  flexShrink: 0,
-                  cursor: 'grab'
-                }}
-                title="Drag to chat to reference this node"
-              >
-                {activeTab}
-              </span>
-
-              {/* Node icon */}
-              {nodesData[activeTab] && (
-                <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                  {getNodeIcon(nodesData[activeTab], dimensionIcons, 18)}
-                </span>
-              )}
-
-              {editingField === 'title' ? (
+            {/* ── Title ── */}
+            <div className="title-row">
+              {titleEditMode ? (
                 <input
-                  ref={inputRef as React.RefObject<HTMLInputElement>}
+                  ref={titleInputRef}
                   type="text"
-                  value={editingValue}
-                  onChange={(e) => setEditingValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onBlur={handleBlur}
-                  disabled={savingField === 'title'}
-                  style={{
-                    fontSize: '20px',
-                    fontWeight: 'bold',
-                    color: 'var(--rah-text-active)',
-                    background: 'transparent',
-                    border: '1px solid var(--rah-border)',
-                    borderRadius: '0',
-                    padding: '4px 8px',
-                    fontFamily: 'inherit',
-                    flex: 1,
-                    outline: 'none'
+                  value={titleEditValue}
+                  onChange={(e) => setTitleEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); void saveTitle(); }
+                    if (e.key === 'Escape') { e.preventDefault(); skipTitleBlurRef.current = true; setTitleEditMode(false); setTitleEditValue(''); }
                   }}
+                  onBlur={() => {
+                    if (skipTitleBlurRef.current) { skipTitleBlurRef.current = false; return; }
+                    void saveTitle();
+                  }}
+                  disabled={titleSaving}
+                  className="title-input"
                   placeholder="Enter title..."
                 />
               ) : (
-                <h1
-                  onClick={() => {
-                    if (titleExpanded[activeTab]) {
-                      startEdit('title', nodesData[activeTab].title || '');
-                    } else {
-                      setTitleExpanded(prev => ({ ...prev, [activeTab]: true }));
-                      setTimeout(() => {
-                        setTitleExpanded(prev => ({ ...prev, [activeTab]: false }));
-                      }, 3000);
-                    }
-                  }}
-                  style={{
-                    fontSize: '20px',
-                    fontWeight: 'bold',
-                    color: 'var(--rah-text-active)',
-                    fontFamily: 'inherit',
-                    cursor: 'pointer',
-                    padding: '4px 8px',
-                    margin: '0',
-                    borderRadius: '0',
-                    background: 'transparent',
-                    border: '1px solid transparent',
-                    transition: 'border-color 0.2s',
-                    flex: 1,
-                    minWidth: 0,
-                    ...(titleExpanded[activeTab] ? {
-                      whiteSpace: 'normal',
-                      wordWrap: 'break-word'
-                    } : {
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    })
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--rah-border)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'transparent';
-                  }}
-                  title={titleExpanded[activeTab] ? undefined : (nodesData[activeTab].title || 'Untitled')}
-                >
-                  {nodesData[activeTab].title || 'Untitled'}
-                  {savingField === 'title' && <span style={{ color: '#555', fontSize: '10px', marginLeft: '6px' }}>saving...</span>}
-                </h1>
+                <button type="button" className="title-button" onClick={startTitleEdit}>
+                  {currentNode.title || 'Untitled'}
+                </button>
               )}
 
-              {/* Connections Button — opens Edges tab */}
-              <button
-                onClick={() => setActiveContentTab('edges')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '4px 8px',
-                  fontSize: '10px',
-                  fontWeight: 500,
-                  color: activeContentTab === 'edges' ? 'var(--rah-accent-green)' : 'var(--rah-text-muted)',
-                  background: activeContentTab === 'edges' ? '#0f2417' : 'transparent',
-                  border: '1px solid',
-                  borderColor: activeContentTab === 'edges' ? 'var(--rah-accent-green)' : 'var(--rah-border-strong)',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  flexShrink: 0
-                }}
-                onMouseEnter={(e) => {
-                  if (activeContentTab !== 'edges') {
-                    e.currentTarget.style.color = 'var(--rah-accent-green)';
-                    e.currentTarget.style.borderColor = '#166534';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeContentTab !== 'edges') {
-                    e.currentTarget.style.color = 'var(--rah-text-muted)';
-                    e.currentTarget.style.borderColor = 'var(--rah-border-strong)';
-                  }
-                }}
-                title="Connections"
-              >
-                <Link size={12} />
-                <span>Edges</span>
-                {activeTab && (
-                  <span style={{ fontWeight: 600 }}>
-                    <span
-                      style={{
-                        minWidth: '18px',
-                        height: '18px',
-                        padding: '0 6px',
-                        borderRadius: '999px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: activeContentTab === 'edges' ? 'var(--rah-accent-green-soft)' : 'var(--rah-bg-active)',
-                        color: activeContentTab === 'edges' ? 'var(--rah-accent-green)' : 'var(--rah-text-soft)',
-                        fontSize: '10px',
-                        lineHeight: 1,
-                      }}
-                    >
-                      {edgesData[activeTab]?.length ?? 0}
-                    </span>
+            </div>
+
+            {/* ── Properties block ── */}
+            <div className="props-block">
+
+              {/* Node identity row — with collapse toggle + delete */}
+              <div className="prop-row node-row">
+                <div className="prop-label">node</div>
+                <div className="prop-value">
+                  <span className="node-meta-value">
+                    <span className="node-meta-icon">{getNodeIcon(currentNode, dimensionIcons, 12)}</span>
+                    <span className="node-id-pill">#{currentNode.id}</span>
                   </span>
-                )}
-              </button>
-
-              {/* Delete Button */}
-              <button
-                onClick={() => confirmDeleteNode(activeTab)}
-                disabled={deletingNode === activeTab}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '4px',
-                  color: deletingNode === activeTab ? '#994444' : '#525252',
-                  background: 'transparent',
-                  border: '1px solid var(--rah-border-strong)',
-                  borderRadius: '4px',
-                  cursor: deletingNode === activeTab ? 'wait' : 'pointer',
-                  transition: 'all 0.2s',
-                  flexShrink: 0
-                }}
-                onMouseEnter={(e) => {
-                  if (deletingNode !== activeTab) {
-                    e.currentTarget.style.color = '#dc2626';
-                    e.currentTarget.style.borderColor = '#dc2626';
-                    e.currentTarget.style.background = 'rgba(220, 38, 38, 0.1)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (deletingNode !== activeTab) {
-                    e.currentTarget.style.color = '#525252';
-                    e.currentTarget.style.borderColor = 'var(--rah-border-strong)';
-                    e.currentTarget.style.background = 'transparent';
-                  }
-                }}
-                title="Delete node"
-              >
-                {deletingNode === activeTab ? '...' : <Trash2 size={12} />}
-              </button>
-            </div>
-
-            {/* Dimensions Section */}
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{
-                overflowX: 'auto',
-                overflowY: 'visible',
-                position: 'relative'
-              }}>
-                <DimensionTags
-                dimensions={nodesData[activeTab].dimensions || []}
-                onUpdate={async (newDimensions) => {
-                  try {
-                    const response = await fetch(`/api/nodes/${activeTab}`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({ dimensions: newDimensions }),
-                    });
-
-                    if (!response.ok) {
-                      throw new Error('Failed to save');
-                    }
-
-                    const result = await response.json();
-                    if (result.node) {
-                      setNodesData(prev => ({ ...prev, [activeTab]: result.node }));
-                    }
-                  } catch (error) {
-                    console.error('Error saving dimensions:', error);
-                    alert('Failed to save dimensions. Please try again.');
-                  }
-                }}
-              />
+                </div>
+                <div className="node-row-actions">
+                  <button
+                    type="button"
+                    className="props-toggle"
+                    onClick={() => setPropsCollapsed(c => !c)}
+                    title={propsCollapsed ? 'Expand properties' : 'Collapse properties'}
+                  >
+                    {propsCollapsed ? '▸' : '▾'}
+                  </button>
+                  <button
+                    type="button"
+                    className="delete-node-button"
+                    onClick={() => setPendingDeleteNodeId(activeTab)}
+                    disabled={deletingNode === activeTab}
+                    title="Delete node"
+                  >
+                    {deletingNode === activeTab ? '…' : <Trash2 size={11} />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Notes | Desc | Source Tabs */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              {/* Tab Bar */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0',
-                marginBottom: '12px',
-                borderBottom: '1px solid var(--rah-border)'
-              }}>
-                <button
-                  onClick={() => { setActiveContentTab('desc'); setNotesEditMode(false); setSourceEditMode(false); setEdgeSearchOpen(false); }}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    fontWeight: activeContentTab === 'desc' ? 600 : 400,
-                    color: activeContentTab === 'desc' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottom: activeContentTab === 'desc' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    marginBottom: '-1px'
-                  }}
-                >
-                  Desc
-                </button>
-                <button
-                  onClick={() => { setActiveContentTab('notes'); setDescEditMode(false); setSourceEditMode(false); setEdgeSearchOpen(false); }}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    fontWeight: activeContentTab === 'notes' ? 600 : 400,
-                    color: activeContentTab === 'notes' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottom: activeContentTab === 'notes' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    marginBottom: '-1px'
-                  }}
-                >
-                  Notes
-                </button>
-                <button
-                  onClick={() => { setActiveContentTab('edges'); setDescEditMode(false); setNotesEditMode(false); setSourceEditMode(false); }}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    fontWeight: activeContentTab === 'edges' ? 600 : 400,
-                    color: activeContentTab === 'edges' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottom: activeContentTab === 'edges' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    marginBottom: '-1px'
-                  }}
-                >
-                  Edges
-                </button>
-                <button
-                  onClick={() => { setActiveContentTab('source'); setDescEditMode(false); setNotesEditMode(false); setEdgeSearchOpen(false); }}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    fontWeight: activeContentTab === 'source' ? 600 : 400,
-                    color: activeContentTab === 'source' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottom: activeContentTab === 'source' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    marginBottom: '-1px'
-                  }}
-                >
-                  Source
-                </button>
-                <div style={{ flex: 1 }} />
-                {/* Action buttons for Desc tab */}
-                {activeContentTab === 'desc' && !descEditMode && (
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                    <button
-                      onClick={() => activeTab && regenerateDescription(activeTab)}
-                      disabled={regeneratingDescription === activeTab}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        color: 'var(--rah-text-soft)',
-                        background: 'transparent',
-                        border: '1px solid var(--rah-border-strong)',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
+              {!propsCollapsed && (<>
+
+              {/* Status indicator row (only when relevant) */}
+              {renderStatusIndicator() !== null && (
+                <div className="prop-row">
+                  <div className="prop-label">embed</div>
+                  <div className="prop-value">{renderStatusIndicator()}</div>
+                </div>
+              )}
+
+              {/* Link */}
+              <div className="prop-row">
+                <div className="prop-label">link</div>
+                <div className="prop-value">
+                  {linkEditMode ? (
+                    <input
+                      ref={linkInputRef}
+                      type="url"
+                      value={linkEditValue}
+                      onChange={(e) => setLinkEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); void saveLink(); }
+                        if (e.key === 'Escape') { e.preventDefault(); skipLinkBlurRef.current = true; setLinkEditMode(false); setLinkEditValue(''); }
                       }}
-                      title="Regenerate description with AI"
-                    >
-                      <RefreshCw size={12} style={{ animation: regeneratingDescription === activeTab ? 'spin 1s linear infinite' : 'none' }} />
-                      Regenerate
-                    </button>
-                    <button
-                      onClick={startDescEdit}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        color: 'var(--rah-text-soft)',
-                        background: 'transparent',
-                        border: '1px solid var(--rah-border-strong)',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
+                      onBlur={() => {
+                        if (skipLinkBlurRef.current) { skipLinkBlurRef.current = false; return; }
+                        void saveLink();
                       }}
-                      title="Edit description"
-                    >
-                      <Pencil size={12} />
-                      Edit
-                    </button>
-                  </div>
-                )}
-                {/* Action buttons for Notes tab */}
-                {activeContentTab === 'notes' && !notesEditMode && (
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                    <button
-                      onClick={createLinkedNote}
-                      disabled={creatingNote}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        color: 'var(--rah-accent-green)',
-                        background: 'transparent',
-                        border: '1px solid #166534',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                      title="Create a new linked node"
-                    >
-                      {creatingNote ? <Loader size={12} className="animate-spin" /> : <Plus size={12} />}
-                      Node
-                    </button>
-                    <button
-                      onClick={startNotesEdit}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        color: 'var(--rah-text-soft)',
-                        background: 'transparent',
-                        border: '1px solid var(--rah-border-strong)',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                      title="Edit notes"
-                    >
-                      <Pencil size={12} />
-                      Edit
-                    </button>
-                  </div>
-                )}
-                {/* Formatting toolbar for Notes edit mode - inline */}
-                {activeContentTab === 'notes' && notesEditMode && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <FormattingToolbar
-                      textareaRef={notesTextareaRef}
-                      value={notesEditValue}
-                      onChange={setNotesEditValue}
-                      inline
+                      disabled={linkSaving}
+                      className="prop-input"
+                      placeholder="https://..."
                     />
-                  </div>
-                )}
-                {/* Action button for Edges tab */}
-                {activeContentTab === 'edges' && (
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
-                    <button
-                      onClick={() => {
-                        setEdgeSearchOpen(!edgeSearchOpen);
-                        if (edgeSearchOpen) {
-                          setNodeSearchQuery('');
-                          setNodeSearchSuggestions([]);
-                        }
+                  ) : currentNode.link ? (
+                    <a
+                      href={currentNode.link}
+                      className="prop-link"
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey) { e.preventDefault(); startLinkEdit(); return; }
+                        if (!shouldOpenExternally(currentNode.link || '')) return;
+                        e.preventDefault();
+                        void openExternalUrl(currentNode.link || '').catch(() => window.alert(`Unable to open ${currentNode.link}`));
                       }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        color: edgeSearchOpen ? 'var(--rah-text-inverse)' : 'var(--rah-accent-green)',
-                        background: edgeSearchOpen ? 'var(--rah-accent-green)' : 'transparent',
-                        border: '1px solid #166534',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                      }}
+                      title={`${currentNode.link} (Cmd+Click to edit)`}
                     >
-                      <Plus size={12} />
-                      {edgeSearchOpen ? 'Cancel' : 'Create'}
+                      {currentNode.link}
+                    </a>
+                  ) : (
+                    <button type="button" className="prop-empty-btn" onClick={startLinkEdit}>
+                      Empty
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
-              {/* Desc Tab Content */}
-              {activeContentTab === 'desc' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  {descEditMode ? (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: '#f59e0b',
-                        marginBottom: '8px',
-                        padding: '8px',
-                        background: '#1a1500',
-                        borderRadius: '4px',
-                        border: '1px solid #3d3500'
-                      }}>
-                        Used as context for AI. Clearly describe what this node is in 280 chars or less.
-                      </div>
-                      {/* Editor */}
-                      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                        <textarea
-                          value={descEditValue}
-                          onChange={(e) => {
-                            const newValue = e.target.value.slice(0, 280);
-                            setDescEditValue(newValue);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
-                              cancelDescEdit();
-                            }
-                          }}
-                          disabled={descSaving}
-                          style={{
-                            color: 'var(--rah-text-base)',
-                            fontSize: '15px',
-                            lineHeight: '1.7',
-                            background: 'transparent',
-                            border: '1px solid var(--rah-border-strong)',
-                            borderRadius: '4px',
-                            padding: '12px',
-                            fontFamily: 'inherit',
-                            width: '100%',
-                            flex: 1,
-                            minHeight: '120px',
-                            resize: 'none',
-                            outline: 'none',
-                            overflow: 'auto'
-                          }}
-                          placeholder="Write a brief description of this node (max 280 chars)..."
-                          maxLength={280}
-                        />
-                        <span style={{
-                          position: 'absolute',
-                          bottom: '12px',
-                          right: '12px',
-                          fontSize: '10px',
-                          color: descEditValue.length >= 260 ? '#f59e0b' : 'var(--rah-text-muted)'
-                        }}>
-                          {descEditValue.length}/280
-                        </span>
-                      </div>
-                      {/* Save/Cancel/Sync buttons */}
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginTop: '12px'
-                      }}>
-                        {/* Sync to Source button - left side */}
-                        <div>
-                          <button
-                            onClick={syncDescToSource}
-                            disabled={descSaving}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '6px 10px',
-                              fontSize: '10px',
-                              color: '#f59e0b',
-                              background: 'transparent',
-                              border: '1px solid #3d3500',
-                              borderRadius: '4px',
-                              cursor: 'pointer'
-                            }}
-                            title="Copy description to source and re-embed"
-                          >
-                            {descSaving ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                            Sync to Source
-                          </button>
-                        </div>
-                        {/* Save/Cancel - right side */}
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button
-                            onClick={cancelDescEdit}
-                            disabled={descSaving}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '6px 12px',
-                              fontSize: '11px',
-                              color: 'var(--rah-text-soft)',
-                              background: 'transparent',
-                              border: '1px solid var(--rah-border-strong)',
-                              borderRadius: '4px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <X size={14} />
-                            Cancel
-                          </button>
-                          <button
-                            onClick={saveDesc}
-                            disabled={descSaving}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '6px 12px',
-                              fontSize: '11px',
-                              color: 'var(--rah-text-inverse)',
-                              background: 'var(--rah-accent-green)',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontWeight: 600
-                            }}
-                          >
-                            {descSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : nodesData[activeTab]?.description ? (
-                    <div
-                      style={{
-                        color: 'var(--rah-text-base)',
-                        fontSize: '15px',
-                        lineHeight: '1.7',
-                        padding: '4px',
-                        flex: 1,
-                        overflow: 'auto'
-                      }}
-                    >
-                      {nodesData[activeTab].description}
-                    </div>
-                  ) : (
-                    <div
-                      onClick={startDescEdit}
-                      style={{
-                        color: '#555',
-                        fontSize: '12px',
-                        fontStyle: 'italic',
-                        cursor: 'pointer',
-                        padding: '8px',
-                        minHeight: '100px',
-                        border: '1px dashed var(--rah-border)',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'transparent',
-                        flex: 1,
-                        transition: 'border-color 0.15s'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--rah-border-strong)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--rah-border)'; }}
-                    >
-                      Click to add a description...
-                    </div>
-                  )}
+              {/* Dimensions */}
+              <div className="prop-row prop-row-top">
+                <div className="prop-label">dime</div>
+                <div className="prop-value">
+                  <DimensionTags
+                    dimensions={currentNode.dimensions || []}
+                    onUpdate={async (newDimensions) => {
+                      try { await updateNode(activeTab, { dimensions: newDimensions }); }
+                      catch (error) { console.error('Error saving dimensions:', error); window.alert('Failed to save dimensions. Please try again.'); }
+                    }}
+                  />
                 </div>
-              )}
+              </div>
 
-              {/* Notes Tab Content */}
-              {activeContentTab === 'notes' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  {notesEditMode ? (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      {/* Editor */}
-                      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                        <textarea
-                          ref={notesTextareaRef}
-                          value={notesEditValue}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setNotesEditValue(val);
-                            // Detect @mention
-                            const caret = e.target.selectionStart || val.length;
-                            const trig = findAtTrigger(val, caret);
-                            if (trig) {
-                              setMentionActive(true);
-                              setMentionQuery(trig.query);
-                              if (mentionTimeout.current) clearTimeout(mentionTimeout.current);
-                              mentionTimeout.current = setTimeout(() => runMentionSearch(trig.query), 280);
-                            } else if (mentionActive) {
-                              resetMention();
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            // @mention navigation
-                            if (mentionActive && mentionResults.length > 0) {
-                              if (e.key === 'ArrowDown') {
-                                e.preventDefault();
-                                setMentionIndex(i => Math.min(i + 1, mentionResults.length - 1));
-                                return;
-                              }
-                              if (e.key === 'ArrowUp') {
-                                e.preventDefault();
-                                setMentionIndex(i => Math.max(i - 1, 0));
-                                return;
-                              }
-                              if (e.key === 'Enter' && mentionResults[mentionIndex]) {
-                                e.preventDefault();
-                                handleNotesMentionSelect(mentionResults[mentionIndex].id, mentionResults[mentionIndex].title);
-                                return;
-                              }
-                              if (e.key === 'Escape') {
-                                e.preventDefault();
-                                resetMention();
-                                return;
-                              }
-                            }
-                            if (e.key === 'Escape') {
-                              cancelNotesEdit();
-                            }
-                          }}
-                          disabled={notesSaving}
-                          style={{
-                            color: 'var(--rah-text-base)',
-                            fontSize: '15px',
-                            lineHeight: '1.7',
-                            background: 'transparent',
-                            border: '1px solid var(--rah-border-strong)',
-                            borderRadius: '4px',
-                            padding: '12px',
-                            fontFamily: 'inherit',
-                            width: '100%',
-                            flex: 1,
-                            minHeight: '200px',
-                            resize: 'none',
-                            outline: 'none',
-                            overflow: 'auto'
-                          }}
-                          placeholder="Start writing... Use @ to mention nodes, and Markdown for formatting."
-                        />
-                        {/* @mention dropdown */}
-                        {mentionActive && (
-                          <div style={{
-                            position: 'absolute',
-                            top: '50px',
-                            left: '12px',
-                            background: 'var(--rah-bg-active)',
-                            border: '1px solid var(--rah-border-strong)',
-                            borderRadius: '6px',
-                            zIndex: 1000,
-                            maxHeight: '200px',
-                            overflowY: 'auto',
-                            minWidth: '300px',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                          }}>
-                            {mentionQuery.trim().length < 2 ? (
-                              <div style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--rah-text-muted)' }}>
-                                Type at least 2 characters to search...
-                              </div>
-                            ) : mentionResults.length === 0 ? (
-                              <div style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--rah-text-muted)' }}>
-                                No nodes found
-                              </div>
-                            ) : (
-                              mentionResults.map((n, idx) => (
-                                <div
-                                  key={n.id}
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    handleNotesMentionSelect(n.id, n.title);
-                                  }}
-                                  onMouseEnter={() => setMentionIndex(idx)}
-                                  style={{
-                                    padding: '8px 12px',
-                                    fontSize: '13px',
-                                    color: 'var(--rah-text-base)',
-                                    cursor: 'pointer',
-                                    background: idx === mentionIndex ? 'var(--rah-bg-elevated)' : 'transparent',
-                                    borderBottom: idx < mentionResults.length - 1 ? '1px solid var(--rah-border-strong)' : 'none'
-                                  }}
-                                >
-                                  <span style={{ color: 'var(--rah-accent-green)', marginRight: '8px', fontWeight: 600 }}>{n.id}</span>
-                                  <span>{n.title.length > 50 ? n.title.slice(0, 50) + '…' : n.title}</span>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {/* Save/Cancel/Sync buttons */}
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginTop: '12px'
-                      }}>
-                        {/* Sync to Source button - left side */}
-                        <div>
-                          {nodesData[activeTab]?.notes && (
-                            <button
-                              onClick={() => setShowSyncConfirm(true)}
-                              disabled={notesSaving || syncing}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                padding: '6px 10px',
-                                fontSize: '10px',
-                                color: '#f59e0b',
-                                background: 'transparent',
-                                border: '1px solid #3d3500',
-                                borderRadius: '4px',
-                                cursor: 'pointer'
-                              }}
-                              title="Copy notes to source and re-embed"
-                            >
-                              {syncing ? <Loader size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                              Sync to Source
-                            </button>
-                          )}
-                        </div>
-                        {/* Save/Cancel - right side */}
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button
-                            onClick={cancelNotesEdit}
-                            disabled={notesSaving || syncing}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '6px 12px',
-                              fontSize: '11px',
-                              color: 'var(--rah-text-soft)',
-                              background: 'transparent',
-                              border: '1px solid var(--rah-border-strong)',
-                              borderRadius: '4px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <X size={14} />
-                            Cancel
-                          </button>
-                          <button
-                            onClick={saveNotes}
-                            disabled={notesSaving || syncing}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '6px 12px',
-                              fontSize: '11px',
-                              color: 'var(--rah-text-inverse)',
-                              background: 'var(--rah-accent-green)',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontWeight: 600
-                            }}
-                          >
-                            {notesSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                      {/* Sync confirmation dialog */}
-                      {showSyncConfirm && (
-                        <div style={{
-                          marginTop: '12px',
-                          padding: '12px',
-                          background: '#1a1500',
-                          border: '1px solid #3d3500',
-                          borderRadius: '4px'
-                        }}>
-                          <div style={{ fontSize: '12px', color: '#f59e0b', marginBottom: '8px' }}>
-                            This will overwrite your source content and update what search uses.
-                          </div>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                            <button
-                              onClick={() => setShowSyncConfirm(false)}
-                              style={{
-                                padding: '4px 10px',
-                                fontSize: '11px',
-                                color: 'var(--rah-text-soft)',
-                                background: 'transparent',
-                                border: '1px solid var(--rah-border-strong)',
-                                borderRadius: '4px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={syncToSource}
-                              style={{
-                                padding: '4px 10px',
-                                fontSize: '11px',
-                                color: 'var(--rah-text-inverse)',
-                                background: '#f59e0b',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontWeight: 600
-                              }}
-                            >
-                              Sync Now
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : nodesData[activeTab]?.notes ? (
-                    <div
-                      style={{
-                        color: 'var(--rah-text-base)',
-                        fontSize: '15px',
-                        lineHeight: '1.7',
-                        padding: '4px',
-                        flex: 1,
-                        overflow: 'auto'
-                      }}
-                    >
-                      <MarkdownWithNodeTokens
-                        content={nodesData[activeTab].notes}
-                        onNodeClick={onNodeClick || onTabSelect}
-                      />
-                    </div>
+              {/* Connections */}
+              <div className="prop-row prop-row-top">
+                <div className="prop-label">edge</div>
+                <div className="prop-value">
+                  {loadingEdges.has(activeTab) ? (
+                    <span className="prop-muted">Loading…</span>
+                  ) : currentEdges.length === 0 ? (
+                    <button type="button" className="prop-empty-btn" onClick={() => setEdgeSearchOpen(true)}>
+                      Empty
+                    </button>
                   ) : (
-                    <div
-                      onClick={startNotesEdit}
-                      style={{
-                        color: '#555',
-                        fontSize: '12px',
-                        fontStyle: 'italic',
-                        cursor: 'pointer',
-                        padding: '8px',
-                        minHeight: '200px',
-                        border: '1px dashed var(--rah-border)',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'transparent',
-                        flex: 1,
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--rah-border-strong)';
-                        e.currentTarget.style.color = 'var(--rah-text-muted)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--rah-border)';
-                        e.currentTarget.style.color = 'var(--rah-text-muted)';
-                      }}
-                    >
-                      Click to add notes...
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Edges Tab Content */}
-              {activeContentTab === 'edges' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-                  {renderConnectionsBody()}
-                </div>
-              )}
-
-              {/* Source Tab Content */}
-              {activeContentTab === 'source' && (
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  {sourceEditMode ? (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: '#f59e0b',
-                        marginBottom: '8px',
-                        padding: '8px',
-                        background: '#1a1500',
-                        borderRadius: '4px',
-                        border: '1px solid #3d3500'
-                      }}>
-                        Editing source changes what search uses. This is the raw content that gets embedded.
-                      </div>
-                      <textarea
-                        value={sourceEditValue}
-                        onChange={(e) => setSourceEditValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            cancelSourceEdit();
-                          }
-                        }}
-                        disabled={sourceSaving}
-                        style={{
-                          color: 'var(--rah-text-secondary)',
-                          fontSize: '12px',
-                          lineHeight: '1.5',
-                          background: 'transparent',
-                          border: '1px solid var(--rah-border-strong)',
-                          borderRadius: '4px',
-                          padding: '12px',
-                          fontFamily: 'monospace',
-                          width: '100%',
-                          flex: 1,
-                          minHeight: '200px',
-                          resize: 'none',
-                          outline: 'none',
-                          overflow: 'auto'
-                        }}
-                        placeholder="Add source content for embedding..."
-                      />
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        gap: '8px',
-                        marginTop: '12px'
-                      }}>
-                        <button
-                          onClick={cancelSourceEdit}
-                          disabled={sourceSaving}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '6px 12px',
-                            fontSize: '11px',
-                            color: 'var(--rah-text-soft)',
-                            background: 'transparent',
-                            border: '1px solid var(--rah-border-strong)',
-                            borderRadius: '4px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <X size={14} />
-                          Cancel
-                        </button>
-                        <button
-                          onClick={saveSource}
-                          disabled={sourceSaving}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '6px 12px',
-                            fontSize: '11px',
-                            color: 'var(--rah-text-inverse)',
-                            background: 'var(--rah-accent-green)',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontWeight: 600
-                          }}
-                        >
-                          {sourceSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                      {/* Mode toggle and edit button */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginBottom: '8px',
-                        flexShrink: 0,
-                      }}>
-                        {/* Raw / Reader toggle */}
-                        <div style={{
-                          display: 'flex',
-                          background: 'var(--rah-bg-surface)',
-                          borderRadius: '4px',
-                          border: '1px solid var(--rah-border)',
-                          overflow: 'hidden',
-                        }}>
-                          <button
-                            onClick={() => setSourceReaderMode('raw')}
-                            style={{
-                              padding: '4px 10px',
-                              fontSize: '10px',
-                              fontWeight: 500,
-                              color: sourceReaderMode === 'raw' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
-                              background: sourceReaderMode === 'raw' ? 'var(--rah-bg-active)' : 'transparent',
-                              border: 'none',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                            }}
-                          >
-                            Raw
-                          </button>
-                          <button
-                            onClick={() => setSourceReaderMode('reader')}
-                            style={{
-                              padding: '4px 10px',
-                              fontSize: '10px',
-                              fontWeight: 500,
-                              color: sourceReaderMode === 'reader' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
-                              background: sourceReaderMode === 'reader' ? 'var(--rah-bg-active)' : 'transparent',
-                              border: 'none',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                            }}
-                          >
-                            Reader
-                          </button>
-                        </div>
-
-                        {/* Edit button */}
-                        <button
-                          onClick={startSourceEdit}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '4px 8px',
-                            fontSize: '10px',
-                            color: 'var(--rah-text-muted)',
-                            background: 'transparent',
-                            border: '1px solid var(--rah-border)',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = 'var(--rah-text-soft)';
-                            e.currentTarget.style.borderColor = 'var(--rah-border-strong)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = 'var(--rah-text-muted)';
-                            e.currentTarget.style.borderColor = 'var(--rah-border)';
-                          }}
-                        >
-                          <Pencil size={10} />
-                          Edit
-                        </button>
-                      </div>
-
-                      {/* Content display */}
-                      <div style={{ flex: 1, overflow: 'auto' }}>
-                        {(nodesData[activeTab]?.source || nodesData[activeTab]?.chunk) ? (
-                          sourceReaderMode === 'reader' ? (
-                            <SourceReader 
-                              content={nodesData[activeTab].source || nodesData[activeTab].chunk || ''} 
-                              onTextSelect={onTextSelect ? (text) => onTextSelect(activeTab, nodesData[activeTab]?.title || 'Untitled', text) : undefined}
-                              highlightedText={highlightedPassage?.nodeId === activeTab ? highlightedPassage.selectedText : null}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                color: 'var(--rah-text-secondary)',
-                                fontSize: '12px',
-                                lineHeight: '1.5',
-                                padding: '12px',
-                                background: 'var(--rah-bg-base)',
-                                border: '1px solid var(--rah-border)',
-                                borderRadius: '4px',
-                                fontFamily: 'monospace',
-                                whiteSpace: 'pre-wrap',
-                                minHeight: '100%',
-                              }}
-                            >
-                              {nodesData[activeTab].source || nodesData[activeTab].chunk}
-                            </div>
-                          )
-                        ) : (
+                    <div className="conn-list">
+                      {visibleEdges.map((connection) => {
+                        const isOut = connection.edge.from_node_id === activeTab;
+                        return (
                           <div
-                            onClick={startSourceEdit}
-                            style={{
-                              color: 'var(--rah-text-muted)',
-                              fontSize: '12px',
-                              fontStyle: 'italic',
-                              cursor: 'pointer',
-                              padding: '12px',
-                              border: '1px dashed var(--rah-border)',
-                              borderRadius: '4px',
-                              textAlign: 'center',
-                              height: '100%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
+                            key={connection.id}
+                            className="conn-row"
+                            onMouseEnter={() => setHoveredConnectionId(connection.id)}
+                            onMouseLeave={() => setHoveredConnectionId(null)}
                           >
-                            No source content. Click to add.
+                            <span className={`conn-dir ${isOut ? 'out' : 'in'}`}>{isOut ? '↗' : '↙'}</span>
+                            <span className="conn-icon">{getNodeIcon(connection.connected_node, dimensionIcons, 12)}</span>
+                            <button
+                              type="button"
+                              className="conn-title-btn"
+                              onClick={() => (onNodeClick || onTabSelect)(connection.connected_node.id)}
+                              title={connection.connected_node.title}
+                            >
+                              {connection.connected_node.title}
+                            </button>
+                            <button
+                              type="button"
+                              className="conn-del-btn"
+                              style={{ opacity: hoveredConnectionId === connection.id ? 1 : 0 }}
+                              onClick={() => void deleteEdge(connection.edge.id)}
+                              disabled={deletingEdge === connection.edge.id}
+                              title="Remove"
+                            >
+                              <Trash2 size={10} />
+                            </button>
                           </div>
-                        )}
+                        );
+                      })}
+                      {currentEdges.length > 3 && (
+                        <button
+                          type="button"
+                          className="conn-more-btn"
+                          onClick={() => setEdgesExpanded(prev => ({ ...prev, [activeTab]: !currentEdgesExpanded }))}
+                        >
+                          {currentEdgesExpanded ? '↑ Show less' : `+ ${currentEdges.length - 3} more`}
+                        </button>
+                      )}
+                      <button type="button" className="conn-add-btn" onClick={() => setEdgeSearchOpen(true)}>
+                        <Plus size={11} /> Add connection
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="prop-row prop-row-top">
+                <div className="prop-label">desc</div>
+                <div className="prop-value">
+                  {descEditMode ? (
+                    <div className="desc-edit-block">
+                      <textarea
+                        ref={descTextareaRef}
+                        value={descEditValue}
+                        onChange={(e) => setDescEditValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void saveDesc(); }
+                          if (e.key === 'Escape') { e.preventDefault(); setDescEditMode(false); setDescEditValue(''); }
+                        }}
+                        disabled={descSaving}
+                        className="desc-textarea"
+                        placeholder="Add a description..."
+                        rows={4}
+                      />
+                      <div className="desc-actions">
+                        <button type="button" className="btn-secondary" onClick={() => { setDescEditMode(false); setDescEditValue(''); }} disabled={descSaving}>
+                          <X size={12} /> Cancel
+                        </button>
+                        <button type="button" className="btn-primary" onClick={() => void saveDesc()} disabled={descSaving}>
+                          {descSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="desc-read-wrap">
+                      <div className="desc-text" onClick={startDescEdit}>
+                        {currentNode.description
+                          ? parseAndRenderContent(currentNode.description, onNodeClick || onTabSelect)
+                          : <span className="prop-empty-btn" style={{ display: 'block' }}>Empty</span>}
+                      </div>
+                      <div className="desc-hover-actions">
+                        <button type="button" className="icon-btn" onClick={startDescEdit} title="Edit">
+                          <Pencil size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          onClick={() => void regenerateDescription(activeTab)}
+                          disabled={regeneratingDescription === activeTab}
+                          title="Regenerate"
+                        >
+                          {regeneratingDescription === activeTab ? <Loader size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                        </button>
                       </div>
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div style={{
-            color: 'var(--rah-text-muted)',
-            fontSize: '13px'
-          }}>
-            Node not found
-          </div>
-        )}
-      </div>
-    </div>
-    <ConfirmDialog
-      open={pendingDeleteNodeId !== null}
-      title="Delete this node?"
-      message="This will permanently remove the node and its data."
-      confirmLabel="Delete"
-      onConfirm={handleConfirmNodeDelete}
-      onCancel={handleCancelNodeDelete}
-    />
-    {/* Tab Context Menu */}
-    {contextMenu && (
-      <div
-        style={{
-          position: 'fixed',
-          top: contextMenu.y,
-          left: contextMenu.x,
-          background: 'var(--rah-bg-active)',
-          border: '1px solid var(--rah-border-strong)',
-          borderRadius: '6px',
-          padding: '4px',
-          zIndex: 9999,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          minWidth: '160px',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {onOpenInOtherSlot && (
-          <button
-            onClick={() => {
-              onOpenInOtherSlot(contextMenu.tabId);
-              setContextMenu(null);
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              padding: '8px 12px',
-              background: 'transparent',
-              border: 'none',
-              borderRadius: '4px',
-              color: 'var(--rah-text-secondary)',
-              fontSize: '12px',
-              cursor: 'pointer',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--rah-bg-elevated)';
-              e.currentTarget.style.color = 'var(--rah-text-active)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = 'var(--rah-text-secondary)';
-            }}
-          >
-            <span style={{ fontSize: '14px' }}>↗</span>
-            Open in other panel
-          </button>
-        )}
-        <button
-          onClick={() => {
-            onTabClose(contextMenu.tabId);
-            setContextMenu(null);
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            width: '100%',
-            padding: '8px 12px',
-            background: 'transparent',
-            border: 'none',
-            borderRadius: '4px',
-            color: 'var(--rah-text-secondary)',
-            fontSize: '12px',
-            cursor: 'pointer',
-            textAlign: 'left',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--rah-bg-elevated)';
-            e.currentTarget.style.color = 'var(--rah-text-active)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = 'var(--rah-text-secondary)';
-          }}
-        >
-          <span style={{ fontSize: '14px' }}>×</span>
-          Close tab
-        </button>
-      </div>
-    )}
+              </div>
 
-  </>
+              </>)}
+
+              {/* Drag handle / ID (hidden, for drag-to-chat) */}
+              <span
+                draggable
+                onDragStart={(e: DragEvent<HTMLSpanElement>) => {
+                  const title = currentNode.title || 'Untitled';
+                  e.dataTransfer.effectAllowed = 'copyMove';
+                  e.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: activeTab, title }));
+                  e.dataTransfer.setData('application/node-info', JSON.stringify({ id: activeTab, title, dimensions: currentNode.dimensions || [] }));
+                  e.dataTransfer.setData('text/plain', `[NODE:${activeTab}:"${title}"]`);
+                }}
+                className="node-drag-handle"
+                title={`Node ${activeTab} — drag to chat`}
+              >
+                {activeTab}
+              </span>
+            </div>
+
+            {renderSourceSection()}
+          </div>
+        )}
+      </div>
+
+      <NodeSearchModal
+        isOpen={edgeSearchOpen}
+        onClose={() => setEdgeSearchOpen(false)}
+        excludeNodeId={activeTab}
+        onEdgeCreate={async (nodeId, explanation) => {
+          if (explanation && explanation.trim()) {
+            await createEdgeWithExplanation(nodeId, explanation.trim());
+          } else {
+            await createEdgeAuto(nodeId);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingDeleteNodeId !== null}
+        title="Delete this node?"
+        message="This will permanently remove the node and its data."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (pendingDeleteNodeId === null) return;
+          void executeDeleteNode(pendingDeleteNodeId);
+          setPendingDeleteNodeId(null);
+        }}
+        onCancel={() => setPendingDeleteNodeId(null)}
+      />
+
+      <style jsx>{`
+        /* ── Layout ── */
+        .focus-panel {
+          height: 100%;
+          overflow: auto;
+          padding: 24px 20px 32px;
+        }
+
+        .document-view {
+          display: flex;
+          flex-direction: column;
+          min-height: 100%;
+        }
+
+        .empty-state {
+          color: var(--rah-text-muted);
+          font-size: 13px;
+          text-align: center;
+          margin-top: 40px;
+        }
+
+        /* ── Title row ── */
+        .title-row {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          margin-bottom: 18px;
+        }
+
+        .node-meta-value {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+        }
+
+        .node-meta-icon {
+          display: flex;
+          align-items: center;
+          color: var(--rah-text-muted);
+        }
+
+        .node-id-pill {
+          font-size: 10px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+          color: var(--rah-text-muted);
+          background: var(--rah-bg-surface);
+          border: 1px solid var(--rah-border);
+          border-radius: 4px;
+          padding: 1px 5px;
+          line-height: 1.4;
+        }
+
+        .title-button,
+        .title-input {
+          flex: 1;
+          min-width: 0;
+          background: transparent;
+          border: none;
+          color: var(--rah-text-active);
+          font-family: inherit;
+          text-align: left;
+        }
+
+        .title-button {
+          padding: 0;
+          font-size: 22px;
+          font-weight: 700;
+          line-height: 1.25;
+          cursor: text;
+          white-space: normal;
+          word-break: break-word;
+          letter-spacing: -0.01em;
+        }
+
+        .title-input {
+          font-size: 22px;
+          font-weight: 700;
+          line-height: 1.25;
+          letter-spacing: -0.01em;
+          padding: 0;
+          outline: none;
+        }
+
+        .node-row-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+          padding-right: 4px;
+        }
+
+        .delete-node-button {
+          color: #888;
+          background: transparent;
+          border: 1px solid #666;
+          width: 26px;
+          height: 26px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          flex-shrink: 0;
+          border-radius: 5px;
+          transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+        }
+
+        .delete-node-button:hover:enabled {
+          color: #ef4444;
+          border-color: #ef4444;
+          background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* ── Properties block ── */
+        .props-block {
+          margin-bottom: 6px;
+        }
+
+        .prop-row {
+          display: flex;
+          align-items: flex-start;
+          min-height: 32px;
+          padding: 0;
+        }
+
+        .prop-row-top {
+        }
+
+        .prop-label {
+          width: 44px;
+          flex-shrink: 0;
+          padding: 7px 8px 7px 0;
+          color: var(--rah-text-muted);
+          font-size: 11px;
+          line-height: 1.5;
+        }
+
+        .prop-value {
+          flex: 1;
+          min-width: 0;
+          padding: 7px 12px 7px 0;
+          overflow: hidden;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+
+        .props-toggle {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          background: transparent;
+          border: 1px solid #666;
+          border-radius: 5px;
+          color: #888;
+          font-size: 14px;
+          cursor: pointer;
+          transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+        }
+
+        .props-toggle:hover {
+          border-color: #999;
+          color: #bbb;
+        }
+
+        /* Link */
+        .prop-link {
+          color: var(--rah-text-soft);
+          text-decoration: none;
+          font-size: 12px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          display: block;
+          min-width: 0;
+          max-width: 100%;
+          transition: color 120ms ease;
+        }
+
+        .prop-link:hover { color: #3b82f6; }
+
+        .prop-input {
+          width: 100%;
+          background: transparent;
+          border: none;
+          border-bottom: 1px solid var(--rah-border-strong);
+          color: var(--rah-text-base);
+          font-size: 12px;
+          outline: none;
+          padding: 0 0 3px 0;
+          font-family: inherit;
+        }
+
+        .prop-empty-btn {
+          background: transparent;
+          border: none;
+          color: var(--rah-text-muted);
+          font-size: 12px;
+          font-style: italic;
+          padding: 0;
+          cursor: pointer;
+          font-family: inherit;
+        }
+
+        .prop-muted {
+          color: var(--rah-text-muted);
+          font-size: 12px;
+        }
+
+        /* Status chips */
+        .status-button,
+        .status-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 6px;
+          font-size: 10px;
+          border-radius: 999px;
+          flex-shrink: 0;
+        }
+
+        .status-button {
+          color: #ef4444;
+          background: transparent;
+          border: 1px solid #7f1d1d;
+          cursor: pointer;
+        }
+
+        .status-chip {
+          color: #f59e0b;
+          border: 1px solid #3d3500;
+          background: rgba(245, 158, 11, 0.06);
+        }
+
+        /* ── Connections in property ── */
+        .conn-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+          width: 100%;
+        }
+
+        .conn-row {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          padding: 2px 4px;
+          border-radius: 4px;
+          min-width: 0;
+        }
+
+        .conn-row:hover { background: var(--rah-bg-hover); }
+
+        .conn-dir {
+          font-size: 10px;
+          flex-shrink: 0;
+          width: 12px;
+          text-align: center;
+        }
+
+        .conn-dir.out { color: var(--rah-accent-green); }
+        .conn-dir.in { color: #f59e0b; }
+
+        .conn-icon {
+          display: inline-flex;
+          align-items: center;
+          flex-shrink: 0;
+        }
+
+        .conn-title-btn {
+          flex: 1;
+          min-width: 0;
+          background: transparent;
+          border: none;
+          padding: 0;
+          color: var(--rah-text-base);
+          font-size: 12px;
+          font-weight: 500;
+          text-align: left;
+          cursor: pointer;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-family: inherit;
+          transition: color 120ms ease;
+        }
+
+        .conn-title-btn:hover { color: var(--rah-accent-green); }
+
+        .conn-del-btn {
+          background: transparent;
+          border: none;
+          color: var(--rah-text-muted);
+          cursor: pointer;
+          padding: 2px;
+          border-radius: 3px;
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          transition: opacity 120ms ease, color 120ms ease;
+        }
+
+        .conn-del-btn:hover:enabled { color: #dc2626; }
+
+        .conn-more-btn {
+          background: transparent;
+          border: none;
+          color: var(--rah-text-muted);
+          font-size: 11px;
+          font-family: inherit;
+          cursor: pointer;
+          padding: 3px 4px;
+          text-align: left;
+          transition: color 120ms ease;
+        }
+
+        .conn-more-btn:hover { color: var(--rah-text-soft); }
+
+        .conn-add-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          background: transparent;
+          border: none;
+          color: var(--rah-text-muted);
+          font-size: 11px;
+          font-family: inherit;
+          cursor: pointer;
+          padding: 3px 4px;
+          transition: color 120ms ease;
+        }
+
+        .conn-add-btn:hover { color: var(--rah-accent-green); }
+
+        /* ── Description in property ── */
+        .desc-read-wrap {
+          position: relative;
+          width: 100%;
+        }
+
+        .desc-text {
+          color: var(--rah-text-base);
+          font-size: 12px;
+          line-height: 1.5;
+          cursor: text;
+          padding-right: 44px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .desc-hover-actions {
+          position: absolute;
+          top: 0;
+          right: 0;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          opacity: 0;
+          transition: opacity 120ms ease;
+        }
+
+        .desc-read-wrap:hover .desc-hover-actions { opacity: 1; }
+
+        .icon-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          background: transparent;
+          border: none;
+          color: var(--rah-text-muted);
+          cursor: pointer;
+          border-radius: 4px;
+          transition: color 120ms ease, background 120ms ease;
+        }
+
+        .icon-btn:hover:enabled {
+          color: var(--rah-text-base);
+          background: var(--rah-bg-active);
+        }
+
+        .desc-edit-block {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          width: 100%;
+        }
+
+        .desc-textarea {
+          width: 100%;
+          background: var(--rah-bg-base);
+          border: 1px solid var(--rah-border-strong);
+          border-radius: 6px;
+          color: var(--rah-text-base);
+          font-family: inherit;
+          font-size: 13px;
+          line-height: 1.6;
+          outline: none;
+          padding: 8px 10px;
+          resize: vertical;
+          min-height: 88px;
+          box-sizing: border-box;
+        }
+
+        .desc-textarea:focus { border-color: var(--rah-border-stronger); }
+
+        .desc-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 6px;
+        }
+
+        .btn-primary {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 5px 10px;
+          border: none;
+          background: var(--rah-accent-green);
+          color: var(--rah-text-inverse);
+          font-size: 11px;
+          font-weight: 600;
+          border-radius: 5px;
+          cursor: pointer;
+          font-family: inherit;
+        }
+
+        .btn-primary:hover:enabled { background: var(--rah-accent-green-hover); }
+
+        .btn-secondary {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 5px 10px;
+          border: 1px solid var(--rah-border-strong);
+          background: transparent;
+          color: var(--rah-text-soft);
+          font-size: 11px;
+          border-radius: 5px;
+          cursor: pointer;
+          font-family: inherit;
+        }
+
+        .btn-secondary:hover:enabled {
+          border-color: var(--rah-border-stronger);
+          color: var(--rah-text-base);
+        }
+
+        /* ── Drag handle (invisible but functional) ── */
+        .node-drag-handle {
+          display: none;
+          position: absolute;
+        }
+      `}</style>
+    </>
   );
 }

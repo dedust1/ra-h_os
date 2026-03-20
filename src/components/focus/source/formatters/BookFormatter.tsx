@@ -120,31 +120,26 @@ export default function BookFormatter({ content, onTextSelect, highlightedText, 
     .filter(p => p.length > 0);
 
   return (
-    <div 
+    <div
       ref={containerRef}
       onMouseUp={handleMouseUp}
       style={{
-        maxWidth: '680px',
-        margin: '0 auto',
-        padding: '24px 16px',
+        padding: '16px 0',
       }}
     >
       {/* Clean text display */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5em' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2em' }}>
         {paragraphs.map((para, idx) => (
           <p
             key={idx}
             style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
-              fontSize: '16px',
-              lineHeight: '1.75',
-              color: '#d4d4d4',
+              fontFamily: 'inherit',
+              fontSize: '15px',
+              lineHeight: '1.7',
+              color: 'var(--rah-text-base)',
               margin: 0,
               whiteSpace: 'pre-wrap',
               wordWrap: 'break-word',
-              textAlign: 'justify',
-              textJustify: 'inter-word',
-              hyphens: 'auto',
             }}
           >
             {renderWithHighlight(para)}

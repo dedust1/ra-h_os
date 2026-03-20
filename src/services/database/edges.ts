@@ -522,7 +522,6 @@ export class EdgeService {
       nodeId,
       nodeId,
       nodeId,
-      nodeId,
       nodeId
     ]);
 

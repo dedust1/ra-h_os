@@ -18,9 +18,16 @@ export class AutoEmbedQueue {
   private readonly cooldownMs = DEFAULT_COOLDOWN_MS;
 
   async recoverStuckNodes(): Promise<void> {
-    const stuckNodes = await nodeService.getNodes({ chunkStatus: 'not_chunked', limit: 1000 });
-    for (const node of stuckNodes) {
+    const notChunked = await nodeService.getNodes({ chunkStatus: 'not_chunked', limit: 1000 });
+    for (const node of notChunked) {
       this.enqueue(node.id, { reason: 'startup_recovery' });
+    }
+
+    // Recover nodes stuck in 'chunking' state — these were interrupted mid-process
+    // and will never complete without intervention since executeTask skips them otherwise
+    const stuckChunking = await nodeService.getNodes({ chunkStatus: 'chunking', limit: 1000 });
+    for (const node of stuckChunking) {
+      this.enqueue(node.id, { force: true, reason: 'stuck_chunking_recovery' });
     }
   }
 
