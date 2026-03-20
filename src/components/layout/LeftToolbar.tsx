@@ -16,7 +16,7 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import type { PaneType } from '../panes/types';
+import type { PaneType, NavigablePaneType } from '../panes/types';
 import type { Theme } from '@/hooks/useTheme';
 
 interface LeftToolbarProps {
@@ -24,7 +24,7 @@ interface LeftToolbarProps {
   onAddStuffClick: () => void;
   onRefreshClick: () => void;
   onSettingsClick: () => void;
-  onPaneTypeClick: (paneType: PaneType) => void;
+  onPaneTypeClick: (paneType: NavigablePaneType) => void;
   isExpanded: boolean;
   onToggleExpanded: () => void;
   openTabTypes: Set<PaneType>;
@@ -36,7 +36,7 @@ interface LeftToolbarProps {
 const NAV_WIDTH_COLLAPSED = 50;
 const NAV_WIDTH_EXPANDED = 280;
 
-const VIEW_ITEMS: Array<{ paneType: PaneType; label: string; icon: typeof LayoutList }> = [
+const VIEW_ITEMS: Array<{ paneType: NavigablePaneType; label: string; icon: typeof LayoutList }> = [
   { paneType: 'views', label: 'Nodes', icon: LayoutList },
   { paneType: 'skills', label: 'Skills', icon: BookOpen },
   { paneType: 'map', label: 'Map', icon: Map },

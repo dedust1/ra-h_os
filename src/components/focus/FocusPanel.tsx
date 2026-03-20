@@ -988,6 +988,9 @@ export default function FocusPanel({
           display: flex;
           flex-direction: column;
           min-height: 100%;
+          width: 100%;
+          max-width: 980px;
+          margin: 0 auto;
         }
 
         .empty-state {

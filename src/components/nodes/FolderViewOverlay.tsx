@@ -24,6 +24,7 @@ interface FolderViewOverlayProps {
   refreshToken: number;
   onDataChanged?: () => void;
   onDimensionSelect?: (dimensionName: string | null) => void;
+  replaceWithViewsOnDimensionSelect?: boolean;
   toolbarHost?: HTMLDivElement | null;
 }
 
@@ -60,6 +61,7 @@ export default function FolderViewOverlay({
   refreshToken,
   onDataChanged,
   onDimensionSelect,
+  replaceWithViewsOnDimensionSelect = false,
   toolbarHost,
 }: FolderViewOverlayProps) {
   const [view, setView] = useState<'dimensions' | 'nodes'>('dimensions');
@@ -171,6 +173,11 @@ export default function FolderViewOverlay({
   };
 
   const handleSelectDimension = (dimension: DimensionSummary) => {
+    if (replaceWithViewsOnDimensionSelect) {
+      onDimensionSelect?.(dimension.dimension);
+      return;
+    }
+
     setSelectedDimension(dimension);
     setView('nodes');
     setNodes([]);

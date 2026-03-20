@@ -56,6 +56,7 @@ export default function DimensionsPane({
             refreshToken={refreshToken}
             onDataChanged={onDataChanged}
             onDimensionSelect={onDimensionSelect}
+            replaceWithViewsOnDimensionSelect={true}
             toolbarHost={toolbarHost}
           />
         </div>

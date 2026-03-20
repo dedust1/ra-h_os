@@ -41,9 +41,10 @@ export default function PaneHeader({
     e.preventDefault();
     setIsDragOver(false);
 
+    if (!slot) return;
     const sourceSlot = e.dataTransfer.getData('application/x-rah-pane');
     if (sourceSlot && sourceSlot !== slot && onSwapPanes) {
-      onSwapPanes();
+      onSwapPanes(sourceSlot as typeof slot, slot);
     }
   };
 

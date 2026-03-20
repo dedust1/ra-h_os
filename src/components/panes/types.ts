@@ -1,6 +1,9 @@
 import React from 'react';
 import { Node } from '@/types/database';
 
+export type SlotId = 'A' | 'B' | 'C';
+export type NavigablePaneType = Exclude<PaneType, 'node'>;
+
 // Stub type for delegation (delegation system removed in rah-light)
 export type AgentDelegation = {
   id: number;
@@ -30,18 +33,18 @@ export interface SlotState {
 
 // Actions panes can emit to the layout
 export type PaneAction =
-  | { type: 'open-node'; nodeId: number; targetSlot?: 'A' | 'B' }
-  | { type: 'open-dimension'; dimension: string; targetSlot?: 'A' | 'B' }
+  | { type: 'open-node'; nodeId: number; targetSlot?: SlotId }
+  | { type: 'open-dimension'; dimension: string; targetSlot?: SlotId }
   | { type: 'switch-pane-type'; paneType: PaneType }
   | { type: 'close-pane' };
 
 // Common props for all panes
 export interface BasePaneProps {
-  slot: 'A' | 'B';
+  slot: SlotId;
   isActive: boolean;
   onPaneAction?: (action: PaneAction) => void;
   onCollapse?: () => void;
-  onSwapPanes?: () => void;
+  onSwapPanes?: (source: SlotId, target: SlotId) => void;
   tabBar?: React.ReactNode;
 }
 
@@ -99,9 +102,9 @@ export interface TablePaneProps extends BasePaneProps {
 
 // Pane header props
 export interface PaneHeaderProps {
-  slot?: 'A' | 'B';
+  slot?: SlotId;
   onCollapse?: () => void;
-  onSwapPanes?: () => void;
+  onSwapPanes?: (source: SlotId, target: SlotId) => void;
   tabBar?: React.ReactNode;
   children?: React.ReactNode;
   toolbarHostRef?: (node: HTMLDivElement | null) => void;

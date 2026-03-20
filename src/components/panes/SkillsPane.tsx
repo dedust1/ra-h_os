@@ -137,7 +137,7 @@ export default function SkillsPane({
         {loading ? (
           <div style={{ color: '#555', fontSize: '13px', textAlign: 'center', paddingTop: '24px' }}>Loading...</div>
         ) : selectedSkill ? (
-          <div>
+          <div style={{ width: '100%', maxWidth: '980px', margin: '0 auto' }}>
             <div style={{ marginBottom: '12px' }}>
               <div style={{ color: '#eee', fontSize: '16px', fontWeight: 600 }}>{selectedSkill.name}</div>
               <div style={{ color: '#888', fontSize: '13px', lineHeight: 1.4, marginTop: '6px' }}>{selectedSkill.description}</div>
