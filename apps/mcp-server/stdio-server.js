@@ -35,6 +35,7 @@ const STATUS_PATH = path.join(
 const addNodeInputSchema = {
   title: z.string().min(1).max(160),
   content: z.string().max(20000).optional(),
+  source: z.string().max(50000).optional(),
   link: z.string().url().optional(),
   description: z.string().max(2000).optional(),
   dimensions: z.array(z.string()).min(1).max(5),
@@ -322,7 +323,7 @@ server.registerTool(
     inputSchema: addNodeInputSchema,
     outputSchema: addNodeOutputSchema
   },
-  async ({ title, content, link, description, dimensions, metadata, chunk }) => {
+  async ({ title, content, source, link, description, dimensions, metadata, chunk }) => {
     const normalizedDimensions = sanitizeDimensions(dimensions);
     if (normalizedDimensions.length === 0) {
       throw new Error('At least one dimension/tag is required when creating a node.');
@@ -330,12 +331,11 @@ server.registerTool(
 
     const payload = {
       title: title.trim(),
-      notes: content?.trim() || undefined,
+      source: source?.trim() || chunk?.trim() || content?.trim() || undefined,
       link: link?.trim() || undefined,
       description: description?.trim() || undefined,
       dimensions: normalizedDimensions,
-      metadata: metadata || {},
-      chunk: chunk?.trim() || undefined
+      metadata: metadata || {}
     };
 
     const result = await callRaHApi('/api/nodes', {
@@ -393,7 +393,7 @@ server.registerTool(
         nodes: nodes.map((node) => ({
           id: node.id,
           title: node.title,
-          notes: node.notes ?? null,
+          source: node.source ?? node.notes ?? null,
           description: node.description ?? null,
           link: node.link ?? null,
           dimensions: node.dimensions || [],
@@ -417,12 +417,16 @@ server.registerTool(
       throw new Error('At least one field must be provided in updates.');
     }
 
-    // Map MCP 'content' field → internal 'notes' field
+    // Map MCP legacy fields to canonical source
     const mappedUpdates = { ...updates };
     if (mappedUpdates.content !== undefined) {
-      mappedUpdates.notes = mappedUpdates.content;
-      delete mappedUpdates.content;
+      mappedUpdates.source = mappedUpdates.content;
     }
+    if (mappedUpdates.chunk !== undefined && mappedUpdates.source === undefined) {
+      mappedUpdates.source = mappedUpdates.chunk;
+    }
+    delete mappedUpdates.content;
+    delete mappedUpdates.chunk;
 
     const result = await callRaHApi(`/api/nodes/${id}`, {
       method: 'PUT',
@@ -463,7 +467,7 @@ server.registerTool(
           nodes.push({
             id: result.node.id,
             title: result.node.title,
-            notes: result.node.notes ?? null,
+            source: result.node.source ?? result.node.notes ?? null,
             link: result.node.link ?? null,
             dimensions: result.node.dimensions || [],
             updated_at: result.node.updated_at

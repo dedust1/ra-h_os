@@ -3,12 +3,13 @@ export interface Node {
   id: number;
   title: string;
   description?: string;
-  notes?: string;             // User's notes/thoughts about this node
+  source?: string;            // Canonical embeddable content
+  notes?: string;             // Deprecated legacy field - do not write
   link?: string;
   event_date?: string | null; // When the thing actually happened (ISO 8601)
   dimensions: string[];       // Flexible dimensions replacing type + stage + segment + tags
   embedding?: Buffer;         // Node-level embedding (BLOB data)
-  chunk?: string;
+  chunk?: string;             // Deprecated legacy field - do not write
   metadata?: any;            // Flexible metadata storage
   created_at: string;
   updated_at: string;
@@ -68,6 +69,7 @@ export interface NodeFilters {
   dimensions?: string[];      // Filter by dimensions (replaces stage/type filtering)
   search?: string;           // Text search in title/content
   searchMode?: 'standard' | 'hybrid'; // standard = FTS/LIKE, hybrid = add node-vector retrieval
+  chunkStatus?: 'not_chunked' | 'chunking' | 'chunked' | 'error';
   limit?: number;
   offset?: number;
   sortBy?: 'updated' | 'edges' | 'created' | 'event_date';  // Sort by updated_at, edge count, created_at, or event_date

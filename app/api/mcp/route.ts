@@ -134,7 +134,7 @@ function createRAHServer(): McpServer {
               id: node.id,
               title: node.title,
               description: node.description ?? null,
-              notes: node.notes ?? null,
+              source: node.source ?? node.notes ?? null,
               link: node.link ?? null,
               dimensions: node.dimensions || [],
               metadata: node.metadata || {},
@@ -263,21 +263,22 @@ function createRAHServer(): McpServer {
         description: 'Create a new node in the knowledge graph.',
         inputSchema: {
           title: z.string().min(1).max(160).describe('Node title'),
-          content: z.string().max(20000).optional().describe('Node content/notes'),
+          content: z.string().max(20000).optional().describe('Legacy content field; mapped to source'),
+          source: z.string().max(50000).optional().describe('Full source text'),
           link: z.string().url().optional().describe('Source URL'),
           description: z.string().max(2000).optional().describe('Short description'),
           dimensions: z.array(z.string()).min(1).max(5).describe('Categories/tags (at least 1)'),
           metadata: z.record(z.any()).optional().describe('Additional metadata'),
         },
       },
-      async ({ title, content, link, description, dimensions, metadata }) => {
+      async ({ title, content, source, link, description, dimensions, metadata }) => {
         // Call the nodes API internally
         const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/nodes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: title.trim(),
-            content: content?.trim(),
+            source: source?.trim() || content?.trim(),
             link: link?.trim(),
             description: description?.trim(),
             dimensions,

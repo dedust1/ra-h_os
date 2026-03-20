@@ -9,7 +9,7 @@ function getNodes(filters = {}) {
   const { dimensions, search, limit = 100, offset = 0 } = filters;
 
   let sql = `
-    SELECT n.id, n.title, n.description, n.notes, n.link, n.event_date, n.metadata, n.chunk,
+    SELECT n.id, n.title, n.description, n.source, n.notes, n.link, n.event_date, n.metadata, n.chunk,
            n.created_at, n.updated_at,
            COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                      FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
@@ -30,7 +30,7 @@ function getNodes(filters = {}) {
 
   // Text search
   if (search) {
-    sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.notes LIKE ? COLLATE NOCASE)`;
+    sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.source LIKE ? COLLATE NOCASE)`;
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
 
@@ -70,7 +70,7 @@ function getNodes(filters = {}) {
  */
 function getNodeById(id) {
   const sql = `
-    SELECT n.id, n.title, n.description, n.notes, n.link, n.event_date, n.metadata, n.chunk,
+    SELECT n.id, n.title, n.description, n.source, n.notes, n.link, n.event_date, n.metadata, n.chunk,
            n.created_at, n.updated_at,
            COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                      FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
@@ -108,11 +108,10 @@ function createNode(nodeData) {
   const {
     title: rawTitle,
     description,
-    notes,
+    source,
     link,
     event_date,
     dimensions = [],
-    chunk,
     metadata = {}
   } = nodeData;
 
@@ -121,30 +120,23 @@ function createNode(nodeData) {
   const now = new Date().toISOString();
   const db = getDb();
 
-  // Build chunk fallback from available fields when no explicit chunk provided
-  let chunkToStore = chunk ?? null;
-  if (!chunkToStore || !chunkToStore.trim()) {
-    const fallbackParts = [title, description, notes].filter(Boolean);
-    const fallback = fallbackParts.join('\n\n').trim();
-    if (fallback) {
-      chunkToStore = fallback;
-    }
-  }
+  const sourceToStore = source && source.trim()
+    ? source
+    : [title, description].filter(Boolean).join('\n\n').trim() || null;
 
   const nodeId = transaction(() => {
     const stmt = db.prepare(`
-      INSERT INTO nodes (title, description, notes, link, event_date, metadata, chunk, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO nodes (title, description, source, link, event_date, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
       title,
       description ?? null,
-      notes ?? null,
+      sourceToStore,
       link ?? null,
       event_date ?? null,
       JSON.stringify(metadata),
-      chunkToStore,
       now,
       now
     );
@@ -169,11 +161,11 @@ function createNode(nodeData) {
 
 /**
  * Update an existing node.
- * Note: notes is APPENDED by default (MCP tool behavior), not replaced.
+ * Source-first update path.
  */
 function updateNode(id, updates, options = {}) {
   const { appendNotes = true } = options;
-  const { title, description, notes, link, event_date, dimensions, chunk, metadata } = updates;
+  const { title, description, source, notes, link, event_date, dimensions, chunk, metadata } = updates;
   const now = new Date().toISOString();
   const db = getDb();
 
@@ -195,15 +187,15 @@ function updateNode(id, updates, options = {}) {
       setFields.push('description = ?');
       params.push(description);
     }
-    if (notes !== undefined) {
-      if (appendNotes && existing.notes) {
-        // Append to existing notes
-        setFields.push('notes = ?');
-        params.push(existing.notes + '\n\n' + notes);
-      } else {
-        setFields.push('notes = ?');
-        params.push(notes);
-      }
+    if (source !== undefined) {
+      setFields.push('source = ?');
+      params.push(source);
+    } else if (notes !== undefined) {
+      const nextSource = appendNotes && existing.source
+        ? `${existing.source}\n\n${notes}`
+        : notes;
+      setFields.push('source = ?');
+      params.push(nextSource);
     }
     if (link !== undefined) {
       setFields.push('link = ?');
@@ -213,8 +205,8 @@ function updateNode(id, updates, options = {}) {
       setFields.push('event_date = ?');
       params.push(event_date);
     }
-    if (chunk !== undefined) {
-      setFields.push('chunk = ?');
+    if (chunk !== undefined && source === undefined) {
+      setFields.push('source = ?');
       params.push(chunk);
     }
     if (metadata !== undefined) {

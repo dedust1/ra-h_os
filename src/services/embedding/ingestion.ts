@@ -103,10 +103,10 @@ export async function embedNodeContent(nodeId: number): Promise<EmbeddingPipelin
     };
   }
 
-  if (!node.chunk || !node.chunk.trim()) {
+  if (!node.source || !node.source.trim()) {
     results.chunk_embeddings = {
       status: 'skipped',
-      message: 'No chunk content to embed',
+      message: 'No source content to embed',
       chunks_created: 0
     };
   } else {

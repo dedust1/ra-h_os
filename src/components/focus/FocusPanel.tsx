@@ -9,10 +9,10 @@ import { parseNodeMarkers } from '@/tools/infrastructure/nodeFormatter';
 import { Node, NodeConnection, Chunk } from '@/types/database';
 import DimensionTags from './dimensions/DimensionTags';
 import { getNodeIcon } from '@/utils/nodeIcons';
-import { openExternalUrl, shouldOpenExternally } from '@/utils/openExternalUrl';
 import { useDimensionIcons } from '@/context/DimensionIconsContext';
 import ConfirmDialog from '../common/ConfirmDialog';
 import { SourceReader } from './source';
+import { openExternalUrl, shouldOpenExternally } from '@/utils/openExternalUrl';
 
 
 interface NodeSearchResult {
@@ -36,8 +36,8 @@ interface FocusPanelProps {
 }
 
 export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeClick, onTabClose, refreshTrigger, onOpenInOtherSlot, hideTabBar, onTextSelect, highlightedPassage }: FocusPanelProps) {
-  const { dimensionIcons } = useDimensionIcons();
   const [nodesData, setNodesData] = useState<Record<number, Node>>({});
+  const { dimensionIcons } = useDimensionIcons();
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: number } | null>(null); 
@@ -97,10 +97,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   const [chunkExpanded, setChunkExpanded] = useState<{ [key: number]: boolean }>({});
   
   // Edges expand/collapse state
-  // edgesExpanded removed — all connections shown in Edges tab
-  
-  // Connections section collapsed state (default closed)
-  const [edgeSearchOpen, setEdgeSearchOpen] = useState(false);
+  const [edgesExpanded, setEdgesExpanded] = useState<{ [key: number]: boolean }>({});
   
   // Title expanded state for click-to-expand full title
   const [titleExpanded, setTitleExpanded] = useState<{ [key: number]: boolean }>({});
@@ -108,7 +105,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   // Description regeneration state
   const [regeneratingDescription, setRegeneratingDescription] = useState<number | null>(null);
 
-  // Content tab state: 'notes', 'desc', or 'source'
+  // Content tab state: 'desc', 'notes', 'edges', or 'source'
   const [activeContentTab, setActiveContentTab] = useState<'notes' | 'desc' | 'edges' | 'source'>('desc');
 
   // Desc (description) edit mode state
@@ -134,6 +131,9 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   const [chunksData, setChunksData] = useState<Record<number, Chunk[]>>({});
   const [loadingChunks, setLoadingChunks] = useState<Set<number>>(new Set());
   const [chunksExpanded, setChunksExpanded] = useState<Record<number, boolean>>({});
+
+  // Edge creation search toggle
+  const [edgeSearchOpen, setEdgeSearchOpen] = useState(false);
 
   // Helper: preview edge type based on heuristics (mirrors backend logic)
   const previewEdgeType = (explanation: string): { type: string; label: string } | null => {
@@ -230,13 +230,16 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     setEditingField(null);
     setEditingValue('');
     setEditingNodeId(null);
-    // Also clear notes/desc/source edit modes
+    // Also clear notes/desc/source/edges edit modes
     setNotesEditMode(false);
     setNotesEditValue('');
     setDescEditMode(false);
     setDescEditValue('');
     setSourceEditMode(false);
     setSourceEditValue('');
+    setEdgeSearchOpen(false);
+    setNodeSearchQuery('');
+    setNodeSearchSuggestions([]);
   }, [activeTab]);
 
   const fetchNodeData = async (id: number) => {
@@ -356,7 +359,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       const updateData: Record<string, string> = {};
 
       if (editingField === 'notes') {
-        updateData.content = editingValue;
+        updateData.notes = editingValue;
       } else {
         updateData[editingField] = editingValue;
       }
@@ -378,7 +381,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
         setNodesData(prev => ({ ...prev, [nodeId]: result.node }));
       }
 
-      // Safety net: ensure edges exist for any tokens present in saved content
+      // Safety net: ensure edges exist for any tokens present in saved notes
       if (editingField === 'notes' && typeof editingValue === 'string') {
         try {
           const tokens = parseNodeMarkers(editingValue);
@@ -421,7 +424,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       const response = await fetch(`/api/nodes/${nodeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: contentValue }),
+        body: JSON.stringify({ content: contentValue }),
       });
       if (!response.ok) throw new Error('Failed to save');
       const result = await response.json();
@@ -497,16 +500,16 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     setDescEditMode(true);
   };
 
-  // Sync description to source (chunk) and re-embed
+  // Sync description to source and re-embed
   const syncDescToSource = async () => {
     if (!activeTab) return;
     setDescSaving(true);
     try {
-      // Save description to chunk field
+      // Save description to source field
       const response = await fetch(`/api/nodes/${activeTab}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chunk: descEditValue }),
+        body: JSON.stringify({ source: descEditValue }),
       });
       if (!response.ok) throw new Error('Failed to sync');
       const result = await response.json();
@@ -533,7 +536,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     }
   };
 
-  // Save notes (content) with explicit Save button
+  // Save notes-tab content into canonical source
   const saveNotes = async () => {
     if (!activeTab) return;
     setNotesSaving(true);
@@ -541,7 +544,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       const response = await fetch(`/api/nodes/${activeTab}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: notesEditValue }),
+        body: JSON.stringify({ source: notesEditValue }),
       });
       if (!response.ok) throw new Error('Failed to save');
       const result = await response.json();
@@ -571,8 +574,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       setNotesEditMode(false);
       setNotesEditValue('');
     } catch (e) {
-      console.error('Error saving notes:', e);
-      alert('Failed to save notes. Please try again.');
+      console.error('Error saving source content:', e);
+      alert('Failed to save content. Please try again.');
     } finally {
       setNotesSaving(false);
     }
@@ -587,11 +590,11 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   // Start editing notes
   const startNotesEdit = () => {
     if (!activeTab || !nodesData[activeTab]) return;
-    setNotesEditValue(nodesData[activeTab].notes || '');
+    setNotesEditValue(nodesData[activeTab].source || nodesData[activeTab].notes || '');
     setNotesEditMode(true);
   };
 
-  // Save source (chunk) with explicit Save button
+  // Save source with explicit Save button
   const saveSource = async () => {
     if (!activeTab) return;
     setSourceSaving(true);
@@ -599,7 +602,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       const response = await fetch(`/api/nodes/${activeTab}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chunk: sourceEditValue }),
+        body: JSON.stringify({ source: sourceEditValue }),
       });
       if (!response.ok) throw new Error('Failed to save');
       const result = await response.json();
@@ -625,7 +628,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   // Start editing source
   const startSourceEdit = () => {
     if (!activeTab || !nodesData[activeTab]) return;
-    setSourceEditValue(nodesData[activeTab].chunk || '');
+    setSourceEditValue(nodesData[activeTab].source || nodesData[activeTab].chunk || '');
     setSourceEditMode(true);
   };
 
@@ -641,11 +644,11 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     setSyncing(true);
     setShowSyncConfirm(false);
     try {
-      // First, save notes content to chunk field
+      // First, save notes content to source field
       const response = await fetch(`/api/nodes/${activeTab}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chunk: notesEditValue }),
+        body: JSON.stringify({ source: notesEditValue }),
       });
       if (!response.ok) throw new Error('Failed to sync');
       const result = await response.json();
@@ -997,14 +1000,14 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   const embedContent = async (nodeId: number) => {
     const node = nodesData[nodeId];
     const hasNotes = node?.notes?.trim();
-    const hasChunk = node?.chunk?.trim();
-    // If chunk is empty but content exists, auto-populate chunk from content
-    if (!hasChunk && hasNotes) {
+    const hasSource = (node?.source || node?.chunk)?.trim();
+    // If source is empty but notes exist, auto-populate source from notes
+    if (!hasSource && hasNotes) {
       try {
         const response = await fetch(`/api/nodes/${nodeId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chunk: hasNotes })
+          body: JSON.stringify({ source: hasNotes })
         });
         
         if (response.ok) {
@@ -1014,13 +1017,13 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
           }
         }
       } catch (error) {
-        console.error('Failed to auto-populate chunk for embedding:', error);
+        console.error('Failed to auto-populate source for embedding:', error);
         return;
       }
     }
-    // If neither content nor chunk exist, require content
-    if (!hasNotes && !hasChunk) {
-      startEdit('content', '');
+    // If neither notes nor source exist, require notes
+    if (!hasNotes && !hasSource) {
+      startEdit('notes', '');
       return;
     }
     setEmbeddingNode(nodeId);
@@ -1119,7 +1122,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       setAddingEdge(null);
       setEdgeExplanation('');
       setPendingEdgeTarget(null);
-      setEdgeSearchOpen(false);
 
     } catch (error) {
       console.error('Error creating edge:', error);
@@ -1157,7 +1159,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       setPendingEdgeTarget(null);
       setNodeSearchQuery('');
       setNodeSearchSuggestions([]);
-      setEdgeSearchOpen(false);
 
     } catch (error) {
       console.error('Error creating edge:', error);
@@ -1277,63 +1278,55 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 borderRadius: '8px',
                 maxHeight: '200px',
                 overflowY: 'auto',
-                zIndex: 10,
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)'
+                zIndex: 100,
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5)',
               }}>
                 {nodeSearchSuggestions.map((suggestion, index) => (
                   <div
                     key={suggestion.id}
-                    onClick={() => handleSelectNodeSuggestion(suggestion)}
+                    onClick={() => {
+                      handleSelectNodeSuggestion(suggestion);
+                      setNodeSearchQuery('');
+                      setNodeSearchSuggestions([]);
+                      setEdgeSearchOpen(false);
+                    }}
                     style={{
-                      padding: '10px 14px',
+                      padding: '8px 12px',
                       cursor: 'pointer',
-                      borderBottom: index < nodeSearchSuggestions.length - 1 ? '1px solid var(--rah-bg-active)' : 'none',
+                      borderBottom: index < nodeSearchSuggestions.length - 1 ? '1px solid var(--rah-border)' : 'none',
                       background: index === selectedSearchIndex ? 'var(--rah-bg-active)' : 'transparent',
                       transition: 'background 100ms ease',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '10px'
+                      gap: '8px',
                     }}
-                    onMouseEnter={(e) => {
-                      if (index !== selectedSearchIndex) {
-                        e.currentTarget.style.background = 'var(--rah-bg-active)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (index !== selectedSearchIndex) {
-                        e.currentTarget.style.background = 'transparent';
-                      }
-                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--rah-bg-active)'; }}
+                    onMouseLeave={(e) => { if (index !== selectedSearchIndex) e.currentTarget.style.background = 'transparent'; }}
                   >
                     <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
                       fontSize: '9px',
                       fontWeight: 600,
-                      color: 'var(--rah-bg-base)',
-                      background: '#22c55e',
-                      padding: '3px 6px',
-                      borderRadius: '6px',
-                      minWidth: '24px',
-                      textAlign: 'center',
+                      color: 'var(--rah-text-inverse)',
+                      background: 'var(--rah-accent-green)',
+                      padding: '2px 5px',
+                      borderRadius: '4px',
                       flexShrink: 0,
-                      fontFamily: "'SF Mono', 'Fira Code', monospace"
+                      fontFamily: "'SF Mono', 'Fira Code', monospace",
                     }}>
                       {suggestion.id}
                     </span>
                     <span style={{
-                      fontSize: '13px',
+                      fontSize: '12px',
                       color: 'var(--rah-text-base)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
-                      flex: 1
+                      flex: 1,
                     }}>
                       {suggestion.title}
                     </span>
                     {index === selectedSearchIndex && (
-                      <span style={{ color: 'var(--rah-text-muted)', fontSize: '13px' }}>↵</span>
+                      <span style={{ color: 'var(--rah-text-muted)', fontSize: '12px' }}>↵</span>
                     )}
                   </div>
                 ))}
@@ -1342,10 +1335,10 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
           </div>
         )}
 
-        {/* Connections List */}
+        {/* Connections list */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loadingEdges.has(activeTab) ? (
-            <div style={{ color: 'var(--rah-text-muted)', fontSize: '12px', fontStyle: 'italic', padding: '16px 0', textAlign: 'center' }}>Loading connections…</div>
+            <div style={{ color: 'var(--rah-text-muted)', fontSize: '12px', fontStyle: 'italic', padding: '8px 0' }}>Loading connections…</div>
           ) : (() => {
             const list = edgesData[activeTab] || [];
             if (list.length === 0) {
@@ -1358,18 +1351,18 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     key={connection.id}
                     style={{
                       padding: '6px 0',
-                      borderBottom: '1px solid var(--rah-bg-panel)',
+                      borderBottom: '1px solid var(--rah-border)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '2px',
                       minWidth: 0,
                     }}
                   >
-                    {/* Row 1: arrow + ID + icon + title + delete */}
+                    {/* Row 1: arrow + ID + title + delete */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                       <span style={{
                         fontSize: '11px',
-                        color: connection.edge.from_node_id === activeTab ? '#22c55e' : '#f59e0b',
+                        color: connection.edge.from_node_id === activeTab ? 'var(--rah-accent-green)' : '#f59e0b',
                         fontWeight: 600,
                         width: '14px',
                         textAlign: 'center',
@@ -1380,8 +1373,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                       <span style={{
                         fontSize: '9px',
                         fontWeight: 700,
-                        color: 'var(--rah-bg-base)',
-                        background: '#22c55e',
+                        color: 'var(--rah-text-inverse)',
+                        background: 'var(--rah-accent-green)',
                         padding: '1px 5px',
                         borderRadius: '4px',
                         flexShrink: 0,
@@ -1405,7 +1398,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                           minWidth: 0,
                           cursor: 'pointer',
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = '#22c55e'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--rah-accent-green)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--rah-text-base)'; }}
                       >
                         {connection.connected_node.title}
@@ -1414,7 +1407,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         onClick={() => deleteEdge(connection.edge.id)}
                         disabled={deletingEdge === connection.edge.id}
                         style={{
-                          color: 'var(--rah-border-stronger)',
+                          color: 'var(--rah-text-muted)',
                           fontSize: '14px',
                           background: 'transparent',
                           border: 'none',
@@ -1424,7 +1417,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                           lineHeight: 1,
                         }}
                         onMouseEnter={(e) => { if (deletingEdge !== connection.edge.id) e.currentTarget.style.color = '#dc2626'; }}
-                        onMouseLeave={(e) => { if (deletingEdge !== connection.edge.id) e.currentTarget.style.color = 'var(--rah-border-stronger)'; }}
+                        onMouseLeave={(e) => { if (deletingEdge !== connection.edge.id) e.currentTarget.style.color = 'var(--rah-text-muted)'; }}
                       >
                         {deletingEdge === connection.edge.id ? '...' : '×'}
                       </button>
@@ -1464,8 +1457,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                           disabled={edgeSavingId === connection.edge.id}
                           style={{
                             fontSize: '10px',
-                            color: '#000',
-                            background: '#22c55e',
+                            color: 'var(--rah-text-inverse)',
+                            background: 'var(--rah-accent-green)',
                             border: 'none',
                             borderRadius: '4px',
                             padding: '3px 8px',
@@ -1508,9 +1501,9 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         {typeof connection.edge.context?.type === 'string' && (
                           <span style={{
                             fontSize: '9px',
-                            color: 'var(--rah-text-muted)',
+                            color: 'var(--rah-text-soft)',
                             background: 'var(--rah-bg-active)',
-                            border: '1px solid var(--rah-bg-active)',
+                            border: '1px solid var(--rah-border)',
                             padding: '1px 5px',
                             borderRadius: '999px',
                             flexShrink: 0,
@@ -1522,7 +1515,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         <span
                           style={{
                             fontSize: '11px',
-                            color: connection.edge.context?.explanation ? '#777' : '#444',
+                            color: connection.edge.context?.explanation ? 'var(--rah-text-muted)' : 'var(--rah-text-soft)',
                             fontStyle: connection.edge.context?.explanation ? 'normal' : 'italic',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -1594,7 +1587,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
         <div style={{
           display: 'flex',
           borderBottom: '1px solid var(--rah-border)',
-          background: 'var(--rah-bg-surface)',
+          background: 'var(--rah-bg-base)',
           flexShrink: 0,
           overflowX: 'auto',
           overflowY: 'hidden'
@@ -1631,7 +1624,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     display: 'flex',
                     alignItems: 'center',
                     borderRight: '1px solid var(--rah-border)',
-                    background: isActive ? 'var(--rah-bg-subtle)' : 'var(--rah-bg-surface)',
+                    background: isActive ? 'var(--rah-bg-subtle)' : 'var(--rah-bg-base)',
                     borderBottom: isActive ? '2px solid var(--rah-text-muted)' : 'none',
                     paddingBottom: isActive ? '0' : '2px',
                     minWidth: '120px',
@@ -1646,7 +1639,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                       padding: '8px 12px',
                       fontSize: '12px',
                       fontFamily: 'inherit',
-                      color: isActive ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
+                      color: isActive ? 'var(--rah-text-active)' : 'var(--rah-text-soft)',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
@@ -1708,7 +1701,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
             Loading...
           </div>
         ) : !currentNode ? (
-          <div style={{ color: 'var(var(--rah-text-muted))', fontSize: '13px' }}>Node not found.</div>
+          <div style={{ color: 'var(--rah-text-muted)', fontSize: '13px' }}>Node not found.</div>
         ) : nodesData[activeTab] ? (
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             {/* URL Row - Above Title */}
@@ -1791,8 +1784,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         return;
                       }
 
-                      const link = nodesData[activeTab].link;
-                      if (!link || !shouldOpenExternally(link)) {
+                      const link = nodesData[activeTab].link || '';
+                      if (!shouldOpenExternally(link)) {
                         return;
                       }
 
@@ -1819,7 +1812,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                   <span
                     onClick={() => startEdit('link', '')}
                     style={{
-                      color: 'var(--rah-text-muted)',
+                      color: '#555',
                       fontSize: '11px',
                       cursor: 'pointer',
                       fontStyle: 'italic'
@@ -1850,8 +1843,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 }}
                 style={{
                   display: 'inline-block',
-                  background: '#22c55e',
-                  color: 'var(--rah-bg-base)',
+                  background: 'var(--rah-accent-green)',
+                  color: 'var(--rah-text-inverse)',
                   fontSize: '10px',
                   fontWeight: 600,
                   padding: '2px 6px',
@@ -1864,7 +1857,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 {activeTab}
               </span>
 
-              {/* Node type icon */}
+              {/* Node icon */}
               {nodesData[activeTab] && (
                 <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                   {getNodeIcon(nodesData[activeTab], dimensionIcons, 18)}
@@ -1938,7 +1931,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                   title={titleExpanded[activeTab] ? undefined : (nodesData[activeTab].title || 'Untitled')}
                 >
                   {nodesData[activeTab].title || 'Untitled'}
-                  {savingField === 'title' && <span style={{ color: 'var(--rah-text-muted)', fontSize: '10px', marginLeft: '6px' }}>saving...</span>}
+                  {savingField === 'title' && <span style={{ color: '#555', fontSize: '10px', marginLeft: '6px' }}>saving...</span>}
                 </h1>
               )}
 
@@ -1948,14 +1941,14 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: '6px',
                   padding: '4px 8px',
                   fontSize: '10px',
                   fontWeight: 500,
-                  color: activeContentTab === 'edges' ? '#22c55e' : 'var(--rah-text-muted)',
+                  color: activeContentTab === 'edges' ? 'var(--rah-accent-green)' : 'var(--rah-text-muted)',
                   background: activeContentTab === 'edges' ? '#0f2417' : 'transparent',
                   border: '1px solid',
-                  borderColor: activeContentTab === 'edges' ? '#22c55e' : 'var(--rah-border-strong)',
+                  borderColor: activeContentTab === 'edges' ? 'var(--rah-accent-green)' : 'var(--rah-border-strong)',
                   borderRadius: '4px',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
@@ -1963,7 +1956,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 }}
                 onMouseEnter={(e) => {
                   if (activeContentTab !== 'edges') {
-                    e.currentTarget.style.color = '#22c55e';
+                    e.currentTarget.style.color = 'var(--rah-accent-green)';
                     e.currentTarget.style.borderColor = '#166534';
                   }
                 }}
@@ -1983,18 +1976,18 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                       style={{
                         minWidth: '18px',
                         height: '18px',
+                        padding: '0 6px',
                         borderRadius: '999px',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        padding: '0 6px',
-                        background: activeContentTab === 'edges' ? 'rgba(34, 197, 94, 0.18)' : 'var(--rah-bg-active)',
-                        color: activeContentTab === 'edges' ? '#a7f3b8' : 'var(--rah-text-muted)',
+                        background: activeContentTab === 'edges' ? 'var(--rah-accent-green-soft)' : 'var(--rah-bg-active)',
+                        color: activeContentTab === 'edges' ? 'var(--rah-accent-green)' : 'var(--rah-text-soft)',
                         fontSize: '10px',
                         lineHeight: 1,
                       }}
                     >
-                      {(edgesData[activeTab] || []).length}
+                      {edgesData[activeTab]?.length ?? 0}
                     </span>
                   </span>
                 )}
@@ -2084,7 +2077,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 borderBottom: '1px solid var(--rah-border)'
               }}>
                 <button
-                  onClick={() => { setActiveContentTab('desc'); setNotesEditMode(false); setSourceEditMode(false); }}
+                  onClick={() => { setActiveContentTab('desc'); setNotesEditMode(false); setSourceEditMode(false); setEdgeSearchOpen(false); }}
                   style={{
                     padding: '8px 16px',
                     fontSize: '11px',
@@ -2092,7 +2085,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     color: activeContentTab === 'desc' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: activeContentTab === 'desc' ? '2px solid #22c55e' : '2px solid transparent',
+                    borderBottom: activeContentTab === 'desc' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     marginBottom: '-1px'
@@ -2101,7 +2094,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                   Desc
                 </button>
                 <button
-                  onClick={() => { setActiveContentTab('notes'); setDescEditMode(false); setSourceEditMode(false); }}
+                  onClick={() => { setActiveContentTab('notes'); setDescEditMode(false); setSourceEditMode(false); setEdgeSearchOpen(false); }}
                   style={{
                     padding: '8px 16px',
                     fontSize: '11px',
@@ -2109,7 +2102,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     color: activeContentTab === 'notes' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: activeContentTab === 'notes' ? '2px solid #22c55e' : '2px solid transparent',
+                    borderBottom: activeContentTab === 'notes' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     marginBottom: '-1px'
@@ -2126,13 +2119,13 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     color: activeContentTab === 'edges' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: activeContentTab === 'edges' ? '2px solid #22c55e' : '2px solid transparent',
+                    borderBottom: activeContentTab === 'edges' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     marginBottom: '-1px'
                   }}
                 >
-                  Edges{activeTab && edgesData[activeTab]?.length ? ` (${edgesData[activeTab].length})` : ''}
+                  Edges
                 </button>
                 <button
                   onClick={() => { setActiveContentTab('source'); setDescEditMode(false); setNotesEditMode(false); setEdgeSearchOpen(false); }}
@@ -2143,7 +2136,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     color: activeContentTab === 'source' ? 'var(--rah-text-base)' : 'var(--rah-text-muted)',
                     background: 'transparent',
                     border: 'none',
-                    borderBottom: activeContentTab === 'source' ? '2px solid #22c55e' : '2px solid transparent',
+                    borderBottom: activeContentTab === 'source' ? '2px solid var(--rah-accent-green)' : '2px solid transparent',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                     marginBottom: '-1px'
@@ -2164,7 +2157,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         gap: '4px',
                         padding: '4px 8px',
                         fontSize: '10px',
-                        color: 'var(--rah-text-muted)',
+                        color: 'var(--rah-text-soft)',
                         background: 'transparent',
                         border: '1px solid var(--rah-border-strong)',
                         borderRadius: '4px',
@@ -2183,7 +2176,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         gap: '4px',
                         padding: '4px 8px',
                         fontSize: '10px',
-                        color: 'var(--rah-text-muted)',
+                        color: 'var(--rah-text-soft)',
                         background: 'transparent',
                         border: '1px solid var(--rah-border-strong)',
                         borderRadius: '4px',
@@ -2208,7 +2201,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         gap: '4px',
                         padding: '4px 8px',
                         fontSize: '10px',
-                        color: '#22c55e',
+                        color: 'var(--rah-accent-green)',
                         background: 'transparent',
                         border: '1px solid #166534',
                         borderRadius: '4px',
@@ -2227,7 +2220,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         gap: '4px',
                         padding: '4px 8px',
                         fontSize: '10px',
-                        color: 'var(--rah-text-muted)',
+                        color: 'var(--rah-text-soft)',
                         background: 'transparent',
                         border: '1px solid var(--rah-border-strong)',
                         borderRadius: '4px',
@@ -2268,8 +2261,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         gap: '4px',
                         padding: '4px 8px',
                         fontSize: '10px',
-                        color: edgeSearchOpen ? '#000' : '#22c55e',
-                        background: edgeSearchOpen ? '#22c55e' : 'transparent',
+                        color: edgeSearchOpen ? 'var(--rah-text-inverse)' : 'var(--rah-accent-green)',
+                        background: edgeSearchOpen ? 'var(--rah-accent-green)' : 'transparent',
                         border: '1px solid #166534',
                         borderRadius: '4px',
                         cursor: 'pointer',
@@ -2383,7 +2376,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               gap: '4px',
                               padding: '6px 12px',
                               fontSize: '11px',
-                              color: 'var(--rah-text-muted)',
+                              color: 'var(--rah-text-soft)',
                               background: 'transparent',
                               border: '1px solid var(--rah-border-strong)',
                               borderRadius: '4px',
@@ -2402,8 +2395,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               gap: '4px',
                               padding: '6px 12px',
                               fontSize: '11px',
-                              color: '#000',
-                              background: '#22c55e',
+                              color: 'var(--rah-text-inverse)',
+                              background: 'var(--rah-accent-green)',
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -2433,7 +2426,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     <div
                       onClick={startDescEdit}
                       style={{
-                        color: 'var(--rah-text-muted)',
+                        color: '#555',
                         fontSize: '12px',
                         fontStyle: 'italic',
                         cursor: 'pointer',
@@ -2536,7 +2529,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                             top: '50px',
                             left: '12px',
                             background: 'var(--rah-bg-active)',
-                            border: '1px solid var(--rah-border-stronger)',
+                            border: '1px solid var(--rah-border-strong)',
                             borderRadius: '6px',
                             zIndex: 1000,
                             maxHeight: '200px',
@@ -2566,11 +2559,11 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                                     fontSize: '13px',
                                     color: 'var(--rah-text-base)',
                                     cursor: 'pointer',
-                                    background: idx === mentionIndex ? 'var(--rah-bg-hover)' : 'transparent',
+                                    background: idx === mentionIndex ? 'var(--rah-bg-elevated)' : 'transparent',
                                     borderBottom: idx < mentionResults.length - 1 ? '1px solid var(--rah-border-strong)' : 'none'
                                   }}
                                 >
-                                  <span style={{ color: '#22c55e', marginRight: '8px', fontWeight: 600 }}>{n.id}</span>
+                                  <span style={{ color: 'var(--rah-accent-green)', marginRight: '8px', fontWeight: 600 }}>{n.id}</span>
                                   <span>{n.title.length > 50 ? n.title.slice(0, 50) + '…' : n.title}</span>
                                 </div>
                               ))
@@ -2621,7 +2614,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               gap: '4px',
                               padding: '6px 12px',
                               fontSize: '11px',
-                              color: 'var(--rah-text-muted)',
+                              color: 'var(--rah-text-soft)',
                               background: 'transparent',
                               border: '1px solid var(--rah-border-strong)',
                               borderRadius: '4px',
@@ -2640,8 +2633,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               gap: '4px',
                               padding: '6px 12px',
                               fontSize: '11px',
-                              color: '#000',
-                              background: '#22c55e',
+                              color: 'var(--rah-text-inverse)',
+                              background: 'var(--rah-accent-green)',
                               border: 'none',
                               borderRadius: '4px',
                               cursor: 'pointer',
@@ -2671,7 +2664,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               style={{
                                 padding: '4px 10px',
                                 fontSize: '11px',
-                                color: 'var(--rah-text-muted)',
+                                color: 'var(--rah-text-soft)',
                                 background: 'transparent',
                                 border: '1px solid var(--rah-border-strong)',
                                 borderRadius: '4px',
@@ -2685,7 +2678,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               style={{
                                 padding: '4px 10px',
                                 fontSize: '11px',
-                                color: '#000',
+                                color: 'var(--rah-text-inverse)',
                                 background: '#f59e0b',
                                 border: 'none',
                                 borderRadius: '4px',
@@ -2711,7 +2704,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                       }}
                     >
                       <MarkdownWithNodeTokens
-                        content={nodesData[activeTab].notes || ''}
+                        content={nodesData[activeTab].notes}
                         onNodeClick={onNodeClick || onTabSelect}
                       />
                     </div>
@@ -2719,7 +2712,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     <div
                       onClick={startNotesEdit}
                       style={{
-                        color: 'var(--rah-text-muted)',
+                        color: '#555',
                         fontSize: '12px',
                         fontStyle: 'italic',
                         cursor: 'pointer',
@@ -2814,7 +2807,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                             gap: '4px',
                             padding: '6px 12px',
                             fontSize: '11px',
-                            color: 'var(--rah-text-muted)',
+                            color: 'var(--rah-text-soft)',
                             background: 'transparent',
                             border: '1px solid var(--rah-border-strong)',
                             borderRadius: '4px',
@@ -2833,8 +2826,8 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                             gap: '4px',
                             padding: '6px 12px',
                             fontSize: '11px',
-                            color: '#000',
-                            background: '#22c55e',
+                            color: 'var(--rah-text-inverse)',
+                            background: 'var(--rah-accent-green)',
                             border: 'none',
                             borderRadius: '4px',
                             cursor: 'pointer',
@@ -2861,7 +2854,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                           display: 'flex',
                           background: 'var(--rah-bg-surface)',
                           borderRadius: '4px',
-                          border: '1px solid var(--rah-bg-active)',
+                          border: '1px solid var(--rah-border)',
                           overflow: 'hidden',
                         }}>
                           <button
@@ -2871,7 +2864,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               fontSize: '10px',
                               fontWeight: 500,
                               color: sourceReaderMode === 'raw' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
-                              background: sourceReaderMode === 'raw' ? 'var(--rah-border-strong)' : 'transparent',
+                              background: sourceReaderMode === 'raw' ? 'var(--rah-bg-active)' : 'transparent',
                               border: 'none',
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
@@ -2886,7 +2879,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                               fontSize: '10px',
                               fontWeight: 500,
                               color: sourceReaderMode === 'reader' ? 'var(--rah-text-active)' : 'var(--rah-text-muted)',
-                              background: sourceReaderMode === 'reader' ? 'var(--rah-border-strong)' : 'transparent',
+                              background: sourceReaderMode === 'reader' ? 'var(--rah-bg-active)' : 'transparent',
                               border: 'none',
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
@@ -2907,17 +2900,17 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                             fontSize: '10px',
                             color: 'var(--rah-text-muted)',
                             background: 'transparent',
-                            border: '1px solid var(--rah-bg-active)',
+                            border: '1px solid var(--rah-border)',
                             borderRadius: '4px',
                             cursor: 'pointer',
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.color = 'var(--rah-text-secondary)';
-                            e.currentTarget.style.borderColor = 'var(--rah-border-stronger)';
+                            e.currentTarget.style.color = 'var(--rah-text-soft)';
+                            e.currentTarget.style.borderColor = 'var(--rah-border-strong)';
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.color = 'var(--rah-text-muted)';
-                            e.currentTarget.style.borderColor = 'var(--rah-bg-active)';
+                            e.currentTarget.style.borderColor = 'var(--rah-border)';
                           }}
                         >
                           <Pencil size={10} />
@@ -2927,10 +2920,10 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
 
                       {/* Content display */}
                       <div style={{ flex: 1, overflow: 'auto' }}>
-                        {nodesData[activeTab]?.chunk ? (
+                        {(nodesData[activeTab]?.source || nodesData[activeTab]?.chunk) ? (
                           sourceReaderMode === 'reader' ? (
                             <SourceReader 
-                              content={nodesData[activeTab].chunk} 
+                              content={nodesData[activeTab].source || nodesData[activeTab].chunk || ''} 
                               onTextSelect={onTextSelect ? (text) => onTextSelect(activeTab, nodesData[activeTab]?.title || 'Untitled', text) : undefined}
                               highlightedText={highlightedPassage?.nodeId === activeTab ? highlightedPassage.selectedText : null}
                             />
@@ -2949,7 +2942,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                                 minHeight: '100%',
                               }}
                             >
-                              {nodesData[activeTab].chunk}
+                              {nodesData[activeTab].source || nodesData[activeTab].chunk}
                             </div>
                           )
                         ) : (
@@ -3036,7 +3029,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
               textAlign: 'left',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--rah-border-strong)';
+              e.currentTarget.style.background = 'var(--rah-bg-elevated)';
               e.currentTarget.style.color = 'var(--rah-text-active)';
             }}
             onMouseLeave={(e) => {
@@ -3068,7 +3061,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
             textAlign: 'left',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--rah-border-strong)';
+            e.currentTarget.style.background = 'var(--rah-bg-elevated)';
             e.currentTarget.style.color = 'var(--rah-text-active)';
           }}
           onMouseLeave={(e) => {

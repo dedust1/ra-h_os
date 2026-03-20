@@ -175,13 +175,13 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            background: 'var(var(--rah-bg-surface))',
-            border: '1px solid var(--rah-border-strong)',
+            background: 'var(--rah-bg-base)',
+            border: '1px solid var(--rah-border)',
             borderRadius: '6px',
             padding: '0 8px',
             gap: '6px',
           }}>
-            <Search size={12} style={{ color: 'var(var(--rah-text-muted))', flexShrink: 0 }} />
+            <Search size={12} style={{ color: 'var(--rah-text-muted)', flexShrink: 0 }} />
             <input
               type="text"
               value={searchQuery}
@@ -190,7 +190,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'var(var(--rah-text-active))',
+                color: 'var(--rah-text-active)',
                 fontSize: '12px',
                 padding: '5px 0',
                 outline: 'none',
@@ -201,7 +201,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
               <button
                 type="button"
                 onClick={() => { setSearchQuery(''); setActiveSearch(''); }}
-                style={{ background: 'transparent', border: 'none', color: 'var(var(--rah-text-muted))', cursor: 'pointer', padding: 0, display: 'flex' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--rah-text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }}
               >
                 <X size={11} />
               </button>
@@ -236,8 +236,8 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
               style={{
                 display: 'flex', alignItems: 'center', gap: '4px',
                 padding: '4px 7px', background: 'transparent',
-                border: '1px solid var(--rah-border-strong)', borderRadius: '5px',
-                color: 'var(var(--rah-text-muted))', fontSize: '11px', cursor: 'pointer',
+                border: '1px solid var(--rah-border)', borderRadius: '5px',
+                color: 'var(--rah-text-soft)', fontSize: '11px', cursor: 'pointer',
               }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -249,7 +249,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
             {showFilterPicker && (
               <div style={{
                 position: 'absolute', top: '100%', left: 0, marginTop: '4px',
-                background: 'var(var(--rah-bg-panel))', border: '1px solid var(--rah-border-strong)', borderRadius: '10px',
+                background: 'var(--rah-bg-panel)', border: '1px solid var(--rah-border)', borderRadius: '10px',
                 padding: '6px', minWidth: '220px', maxHeight: '320px', overflowY: 'auto',
                 zIndex: 1000, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
               }}>
@@ -260,13 +260,13 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                   placeholder="Search dimensions..."
                   autoFocus
                   style={{
-                    width: '100%', padding: '7px 10px', background: 'var(var(--rah-bg-surface))',
+                    width: '100%', padding: '7px 10px', background: 'var(--rah-bg-base)',
                     border: '1px solid transparent', borderRadius: '6px',
-                    color: 'var(var(--rah-text-active))', fontSize: '12px', marginBottom: '4px', outline: 'none',
+                    color: 'var(--rah-text-active)', fontSize: '12px', marginBottom: '4px', outline: 'none',
                   }}
                 />
                 {filterPickerDimensions.length === 0 ? (
-                  <div style={{ padding: '12px', color: 'var(var(--rah-text-muted))', fontSize: '12px', textAlign: 'center' }}>
+                  <div style={{ padding: '12px', color: 'var(--rah-text-muted)', fontSize: '12px', textAlign: 'center' }}>
                     No matching dimensions
                   </div>
                 ) : (
@@ -283,14 +283,14 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         width: '100%', padding: '7px 10px', background: 'transparent',
-                        border: 'none', borderRadius: '5px', color: 'var(var(--rah-text-secondary))',
+                        border: 'none', borderRadius: '5px', color: 'var(--rah-text-secondary)',
                         fontSize: '12px', cursor: 'pointer', textAlign: 'left',
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                     >
                       <span>{d.dimension}</span>
-                      <span style={{ color: 'var(var(--rah-text-muted))', fontSize: '10px', background: 'var(var(--rah-bg-active))', padding: '1px 6px', borderRadius: '10px' }}>
+                      <span style={{ color: 'var(--rah-text-muted)', fontSize: '10px', background: 'var(--rah-bg-active)', padding: '1px 6px', borderRadius: '10px' }}>
                         {d.count}
                       </span>
                     </button>
@@ -303,9 +303,9 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
           {selectedFilters.length > 0 && (
             <button
               onClick={() => setSelectedFilters([])}
-              style={{ padding: '4px 6px', background: 'transparent', border: 'none', color: 'var(var(--rah-text-muted))', fontSize: '11px', cursor: 'pointer' }}
+              style={{ padding: '4px 6px', background: 'transparent', border: 'none', color: 'var(--rah-text-muted)', fontSize: '11px', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--rah-text-muted)'; }}
             >
               Clear
             </button>
@@ -319,8 +319,8 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
             style={{
               display: 'flex', alignItems: 'center', gap: '4px',
               padding: '4px 7px', background: 'transparent',
-              border: '1px solid var(--rah-border-strong)', borderRadius: '5px',
-              color: 'var(var(--rah-text-muted))', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap',
+              border: '1px solid var(--rah-border)', borderRadius: '5px',
+              color: 'var(--rah-text-soft)', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap',
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -333,7 +333,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
           {showSortDropdown && (
             <div style={{
               position: 'absolute', top: '100%', right: 0, marginTop: '4px',
-              background: 'var(var(--rah-bg-panel))', border: '1px solid var(--rah-border-strong)', borderRadius: '10px',
+              background: 'var(--rah-bg-panel)', border: '1px solid var(--rah-border)', borderRadius: '10px',
               padding: '4px', minWidth: '160px', zIndex: 1000,
               boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
             }}>
@@ -346,13 +346,13 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                     width: '100%', padding: '7px 10px',
                     background: sortOrder === key ? 'rgba(255,255,255,0.04)' : 'transparent',
                     border: 'none', borderRadius: '5px',
-                    color: sortOrder === key ? '#f0f0f0' : '#999',
+                    color: sortOrder === key ? 'var(--rah-text-active)' : 'var(--rah-text-soft)',
                     fontSize: '12px', cursor: 'pointer', textAlign: 'left',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = sortOrder === key ? 'rgba(255,255,255,0.04)' : 'transparent'; }}
                 >
-                  {sortOrder === key && <span style={{ color: '#22c55e', fontSize: '12px' }}>✓</span>}
+                  {sortOrder === key && <span style={{ color: 'var(--rah-accent-green)', fontSize: '12px' }}>✓</span>}
                   {SORT_LABELS[key]}
                 </button>
               ))}
@@ -363,15 +363,15 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
         {/* Pagination */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '6px',
-          fontSize: '11px', color: 'var(var(--rah-text-muted))', whiteSpace: 'nowrap',
+          fontSize: '11px', color: 'var(--rah-text-muted)', whiteSpace: 'nowrap',
         }}>
           <span>{total > 0 ? `${startItem}-${endItem} of ${total}` : '0 nodes'}</span>
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page <= 1}
             style={{
-              background: 'transparent', border: '1px solid var(--rah-border-strong)', borderRadius: '4px',
-              color: page <= 1 ? '#333' : '#888', cursor: page <= 1 ? 'default' : 'pointer',
+              background: 'transparent', border: '1px solid var(--rah-border)', borderRadius: '4px',
+              color: page <= 1 ? 'var(--rah-text-muted)' : 'var(--rah-text-soft)', cursor: page <= 1 ? 'default' : 'pointer',
               padding: '2px 4px', display: 'flex',
             }}
           >
@@ -381,8 +381,8 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
             style={{
-              background: 'transparent', border: '1px solid var(--rah-border-strong)', borderRadius: '4px',
-              color: page >= totalPages ? '#333' : '#888',
+              background: 'transparent', border: '1px solid var(--rah-border)', borderRadius: '4px',
+              color: page >= totalPages ? 'var(--rah-text-muted)' : 'var(--rah-text-soft)',
               cursor: page >= totalPages ? 'default' : 'pointer',
               padding: '2px 4px', display: 'flex',
             }}
@@ -410,9 +410,9 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
       {/* Table */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {loading ? (
-          <div style={{ padding: '40px', color: 'var(var(--rah-text-muted))', textAlign: 'center', fontSize: '13px' }}>Loading...</div>
+          <div style={{ padding: '40px', color: 'var(--rah-text-muted)', textAlign: 'center', fontSize: '13px' }}>Loading...</div>
         ) : nodes.length === 0 ? (
-          <div style={{ padding: '40px', color: 'var(var(--rah-text-muted))', textAlign: 'center', fontSize: '13px' }}>
+          <div style={{ padding: '40px', color: 'var(--rah-text-muted)', textAlign: 'center', fontSize: '13px' }}>
             {activeSearch || selectedFilters.length > 0 ? 'No nodes match your filters.' : 'No nodes yet.'}
           </div>
         ) : (
@@ -450,15 +450,15 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                       height: '44px',
                       cursor: 'pointer',
                       background: hoveredRow === node.id
-                        ? '#141414'
-                        : i % 2 === 0 ? '#080808' : '#0d0d0d',
+                        ? 'var(--rah-bg-panel)'
+                        : i % 2 === 0 ? 'var(--rah-bg-base)' : 'var(--rah-bg-subtle)',
                       transition: 'background 0.1s ease',
                     }}
                   >
                     {/* Title */}
                     <td style={tdStyle()}>
                       <div style={truncCell}>
-                        <span style={{ fontSize: '13px', color: '#e0e0e0', fontWeight: 400 }}>
+                        <span style={{ fontSize: '13px', color: 'var(--rah-text-base)', fontWeight: 400 }}>
                           {node.title || 'Untitled'}
                         </span>
                       </div>
@@ -468,7 +468,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                     <td style={tdStyle({ textAlign: 'right' })}>
                       <span style={{
                         fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
-                        fontSize: '11px', color: 'var(var(--rah-text-muted))',
+                        fontSize: '11px', color: 'var(--rah-text-muted)',
                       }}>
                         {node.id}
                       </span>
@@ -477,7 +477,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                     {/* Description */}
                     <td style={tdStyle()}>
                       <div style={truncCell}>
-                        <span style={{ fontSize: '11px', color: 'var(var(--rah-text-muted))' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--rah-text-soft)' }}>
                           {node.description || '\u2014'}
                         </span>
                       </div>
@@ -486,8 +486,8 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                     {/* Notes */}
                     <td style={tdStyle()}>
                       <div style={truncCell}>
-                        <span style={{ fontSize: '11px', color: 'var(var(--rah-text-muted))' }}>
-                          {node.notes ? node.notes.slice(0, 120) : '\u2014'}
+                        <span style={{ fontSize: '11px', color: 'var(--rah-text-soft)' }}>
+                          {(node.source || node.notes) ? (node.source || node.notes || '').slice(0, 120) : '\u2014'}
                         </span>
                       </div>
                     </td>
@@ -503,7 +503,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                             </span>
                           </span>
                         ) : (
-                          <span style={{ fontSize: '11px', color: '#333' }}>{'\u2014'}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--rah-text-muted)' }}>{'\u2014'}</span>
                         )}
                       </div>
                     </td>
@@ -516,49 +516,49 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                             {node.dimensions.slice(0, 3).map(d => (
                               <span key={d} style={{
                                 fontSize: '9px', padding: '1px 5px',
-                                background: '#111914', border: '1px solid #1f2f24',
-                                color: '#bbf7d0', borderRadius: '3px',
+                                background: 'var(--rah-accent-green-soft)', border: '1px solid var(--rah-accent-green-soft-strong)',
+                                color: 'var(--rah-accent-green)', borderRadius: '3px',
                                 whiteSpace: 'nowrap',
                               }}>
                                 {d}
                               </span>
                             ))}
                             {node.dimensions.length > 3 && (
-                              <span style={{ fontSize: '9px', color: 'var(var(--rah-text-muted))' }}>
+                              <span style={{ fontSize: '9px', color: 'var(--rah-text-muted)' }}>
                                 +{node.dimensions.length - 3}
                               </span>
                             )}
                           </>
                         ) : (
-                          <span style={{ fontSize: '10px', color: '#333' }}>{'\u2014'}</span>
+                          <span style={{ fontSize: '10px', color: 'var(--rah-text-muted)' }}>{'\u2014'}</span>
                         )}
                       </div>
                     </td>
 
                     {/* Edges */}
                     <td style={tdStyle({ textAlign: 'right' })}>
-                      <span style={{ fontSize: '12px', color: node.edge_count ? '#888' : '#333' }}>
+                      <span style={{ fontSize: '12px', color: node.edge_count ? 'var(--rah-text-soft)' : 'var(--rah-text-muted)' }}>
                         {node.edge_count ?? 0}
                       </span>
                     </td>
 
                     {/* Event Date */}
                     <td style={tdStyle()}>
-                      <span style={{ fontSize: '11px', color: node.event_date ? '#888' : '#333' }}>
+                      <span style={{ fontSize: '11px', color: node.event_date ? 'var(--rah-text-soft)' : 'var(--rah-text-muted)' }}>
                         {formatDate(node.event_date)}
                       </span>
                     </td>
 
                     {/* Updated */}
                     <td style={tdStyle()}>
-                      <span style={{ fontSize: '11px', color: 'var(var(--rah-text-muted))' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--rah-text-muted)' }}>
                         {formatRelativeTime(node.updated_at)}
                       </span>
                     </td>
 
                     {/* Created */}
                     <td style={tdStyle()}>
-                      <span style={{ fontSize: '11px', color: 'var(var(--rah-text-muted))' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--rah-text-muted)' }}>
                         {formatRelativeTime(node.created_at)}
                       </span>
                     </td>
@@ -566,7 +566,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                     {/* Metadata */}
                     <td style={tdStyle()}>
                       <div style={truncCell}>
-                        <span style={{ fontSize: '10px', color: 'var(var(--rah-text-muted))', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--rah-text-muted)', fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace' }}>
                           {metaStr || '\u2014'}
                         </span>
                       </div>
@@ -575,8 +575,8 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                     {/* Chunk */}
                     <td style={tdStyle()}>
                       <div style={truncCell}>
-                        <span style={{ fontSize: '10px', color: 'var(var(--rah-text-muted))' }}>
-                          {node.chunk ? node.chunk.slice(0, 100) : '\u2014'}
+                        <span style={{ fontSize: '10px', color: 'var(--rah-text-muted)' }}>
+                          {(node.source || node.chunk) ? (node.source || node.chunk || '').slice(0, 100) : '\u2014'}
                         </span>
                       </div>
                     </td>
@@ -585,7 +585,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
                     <td style={tdStyle()}>
                       <span style={{
                         fontSize: '10px',
-                        color: node.chunk_status === 'chunked' ? '#4a9' : node.chunk_status === 'error' ? '#e55' : '#555',
+                        color: node.chunk_status === 'chunked' ? 'var(--rah-accent-green)' : node.chunk_status === 'error' ? '#e55' : 'var(--rah-text-muted)',
                       }}>
                         {node.chunk_status || '\u2014'}
                       </span>
@@ -593,7 +593,7 @@ export default function DatabaseTableView({ onNodeClick, refreshToken = 0, toolb
 
                     {/* Embedding Updated */}
                     <td style={tdStyle()}>
-                      <span style={{ fontSize: '11px', color: 'var(var(--rah-text-muted))' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--rah-text-muted)' }}>
                         {node.embedding_updated_at ? formatRelativeTime(node.embedding_updated_at) : '\u2014'}
                       </span>
                     </td>
@@ -612,15 +612,15 @@ function thStyle(extra: React.CSSProperties = {}): React.CSSProperties {
   return {
     position: 'sticky' as const,
     top: 0,
-    background: 'var(var(--rah-bg-base))',
+    background: 'var(--rah-bg-base)',
     padding: '8px 12px',
     fontSize: '10px',
     fontWeight: 500,
-    color: 'var(var(--rah-text-muted))',
+    color: 'var(--rah-text-muted)',
     textAlign: 'left',
     letterSpacing: '0.05em',
     whiteSpace: 'nowrap',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    borderBottom: '1px solid var(--rah-border)',
     zIndex: 1,
     ...extra,
   };
@@ -630,7 +630,7 @@ function tdStyle(extra: React.CSSProperties = {}): React.CSSProperties {
   return {
     padding: '0 12px',
     verticalAlign: 'middle',
-    borderBottom: '1px solid #111',
+    borderBottom: '1px solid var(--rah-border)',
     overflow: 'hidden',
     ...extra,
   };

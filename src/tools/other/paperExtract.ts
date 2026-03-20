@@ -69,7 +69,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
 }
 
 export const paperExtractTool = tool({
-  description: 'Extract a PDF or research paper into a node with summary, metadata, and full-text chunk',
+  description: 'Extract a PDF or research paper into a node with summary, metadata, and full-text source',
   inputSchema: z.object({
     url: z.string().describe('The PDF URL to add to inbox'),
     title: z.string().optional().describe('Custom title (auto-generated if not provided)'),
@@ -95,14 +95,13 @@ export const paperExtractTool = tool({
         };
       }
 
-      let result: { success: boolean; notes?: string; chunk?: string; metadata?: any; error?: string };
+      let result: { success: boolean; source?: string; metadata?: any; error?: string };
       
       try {
         const extractionResult = await extractPaper(url);
         result = {
           success: true,
-          notes: extractionResult.content,
-          chunk: extractionResult.chunk,
+          source: extractionResult.chunk || extractionResult.content,
           metadata: {
             title: extractionResult.metadata.title,
             pages: extractionResult.metadata.pages,
@@ -119,7 +118,7 @@ export const paperExtractTool = tool({
         };
       }
 
-      if (!result.success || (!result.notes && !result.chunk)) {
+      if (!result.success || !result.source) {
         return {
           success: false,
           error: result.error || 'Failed to extract PDF content',
@@ -132,7 +131,7 @@ export const paperExtractTool = tool({
       // Step 2: AI Analysis for enhanced metadata
       const aiAnalysis = await analyzeContentWithAI(
         result.metadata?.title || `PDF: ${new URL(url).pathname.split('/').pop()?.replace('.pdf', '')}`, 
-        result.notes?.substring(0, 2000) || 'PDF document content', 
+        result.source.substring(0, 2000) || 'PDF document content', 
         'pdf'
       );
 
@@ -153,17 +152,16 @@ export const paperExtractTool = tool({
         body: JSON.stringify({
           title: nodeTitle,
           description: aiAnalysis?.nodeDescription,
-          notes: enhancedDescription,
+          source: result.source,
           link: url,
           dimensions: trimmedDimensions,
-          chunk: result.chunk || result.notes,
           metadata: {
             source: 'pdf',
             hostname: new URL(url).hostname,
             author: result.metadata?.author || result.metadata?.info?.Author,
             pages: result.metadata?.pages,
             file_size: result.metadata?.file_size,
-            content_length: (result.chunk || result.notes)?.length,
+            content_length: result.source.length,
             extraction_method: result.metadata?.extraction_method || 'python_pdfplumber',
             ai_analysis: aiAnalysis?.reasoning,
             enhanced_description: enhancedDescription,
@@ -197,7 +195,7 @@ export const paperExtractTool = tool({
         data: {
           nodeId: createResult.data?.id,
           title: nodeTitle,
-          contentLength: (result.chunk || result.notes || '').length,
+          contentLength: result.source.length,
           url: url,
           dimensions: actualDimensions
         }

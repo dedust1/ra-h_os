@@ -149,7 +149,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
 }
 
 export const websiteExtractTool = tool({
-  description: 'Extract website content and metadata into a node with summary, tags, and raw chunk',
+  description: 'Extract website content and metadata into a node with summary, tags, and raw source text',
   inputSchema: z.object({
     url: z.string().describe('The website URL to add to knowledge base'),
     title: z.string().optional().describe('Custom title (auto-generated if not provided)'),
@@ -166,14 +166,13 @@ export const websiteExtractTool = tool({
         };
       }
 
-      let result: { success: boolean; notes?: string; chunk?: string; metadata?: any; error?: string };
+      let result: { success: boolean; source?: string; metadata?: any; error?: string };
       
       try {
         const extractionResult = await extractWebsite(url);
         result = {
           success: true,
-          notes: extractionResult.content,
-          chunk: extractionResult.chunk,
+          source: extractionResult.chunk || extractionResult.content,
           metadata: {
             title: extractionResult.metadata.title,
             author: extractionResult.metadata.author,
@@ -191,7 +190,7 @@ export const websiteExtractTool = tool({
         };
       }
 
-      if (!result.success || (!result.notes && !result.chunk)) {
+      if (!result.success || !result.source) {
         return {
           success: false,
           error: result.error || 'Failed to extract website content',
@@ -206,7 +205,7 @@ export const websiteExtractTool = tool({
       const contentType = inferWebsiteContentType(url);
       const aiAnalysis = await analyzeContentWithAI(
         result.metadata?.title || `Website: ${new URL(url).hostname}`, 
-        result.notes?.substring(0, 2000) || 'Website content', 
+        result.source.substring(0, 2000) || 'Website content', 
         contentType,
         existingDimensions
       );
@@ -231,17 +230,16 @@ export const websiteExtractTool = tool({
         body: JSON.stringify({
           title: nodeTitle,
           description: aiAnalysis?.nodeDescription,
-          notes: enhancedDescription,
+          source: result.source,
           link: url,
           event_date: result.metadata?.published_date || result.metadata?.date || null,
           dimensions: finalDimensions,
-          chunk: result.chunk || result.notes,
           metadata: {
             source: contentType,
             hostname: new URL(url).hostname,
             author: result.metadata?.author,
             published_date: result.metadata?.published_date || result.metadata?.date,
-            content_length: (result.chunk || result.notes)?.length,
+            content_length: result.source.length,
             extraction_method: result.metadata?.extraction_method || 'python_beautifulsoup',
             ai_analysis: aiAnalysis?.reasoning,
             enhanced_description: enhancedDescription,
@@ -275,7 +273,7 @@ export const websiteExtractTool = tool({
         data: {
           nodeId: createResult.data?.id,
           title: nodeTitle,
-          contentLength: (result.chunk || result.notes || '').length,
+          contentLength: result.source.length,
           url: url,
           dimensions: actualDimensions
         }

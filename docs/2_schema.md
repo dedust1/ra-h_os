@@ -1,5 +1,7 @@
 # Database Schema
 
+This page describes the database as it exists on disk, including some legacy tables and columns that remain for compatibility and historical records. The current shipped product uses a single RA-H assistant; old delegation-era fields should not be read as active UX concepts.
+
 ## Entity Relationship Diagram
 
 ```mermaid
@@ -8,13 +10,16 @@ erDiagram
     nodes ||--o{ edges : "from"
     nodes ||--o{ edges : "to"
     nodes ||--o{ chunks : "contains"
+    nodes ||--o{ chats : "focused_on"
     dimensions ||--o{ node_dimensions : "tagged_with"
+    chats }o--|| agent_delegations : "belongs_to"
 
     nodes {
         INTEGER id PK
         TEXT title
-        TEXT content
-        TEXT type
+        TEXT source
+        TEXT description
+        TEXT event_date
         BLOB embedding
     }
 
@@ -29,6 +34,7 @@ erDiagram
     dimensions {
         TEXT name PK
         INTEGER is_priority
+        TEXT icon
     }
 
     node_dimensions {
@@ -40,6 +46,19 @@ erDiagram
         INTEGER id PK
         INTEGER node_id FK
         TEXT text
+    }
+
+    chats {
+        INTEGER id PK
+        INTEGER focused_node_id FK
+        TEXT user_message
+        TEXT assistant_message
+    }
+
+    agent_delegations {
+        INTEGER id PK
+        TEXT task
+        TEXT status
     }
 ```
 
@@ -80,25 +99,24 @@ Primary knowledge storage. Each row is a discrete knowledge item.
 **Columns:**
 - `id` (INTEGER PK) - Unique identifier
 - `title` (TEXT) - Node title
-- `content` (TEXT) - Full content
-- `type` (TEXT) - Node type (memory, paper, idea, person, etc)
+- `description` (TEXT) - WHAT this is + WHY it matters (primary identity field)
+- `source` (TEXT) - Canonical source content used for chunking and embedding
 - `link` (TEXT) - External source URL (only for source nodes, not derived ideas)
-- `description` (TEXT) - Brief summary
+- `event_date` (TEXT) - When the thing actually happened (vs `created_at` = when it entered the graph)
 - `metadata` (TEXT) - JSON metadata
-- `chunk` (TEXT) - Source text for chunking
 - `chunk_status` (TEXT) - Chunking status (not_chunked, chunked)
 - `embedding` (BLOB) - Node-level embedding vector
 - `embedding_text` (TEXT) - Text that was embedded
 - `embedding_updated_at` (TEXT) - Embedding timestamp
-- `is_pinned` (INTEGER) - Legacy pin flag (kept for migration; not surfaced in UI)
 - `created_at`, `updated_at` (TEXT) - Timestamps
 
-**Indexes:**
-- `idx_nodes_type` - Fast type filtering
-- `idx_nodes_pinned` - Legacy partial index (no longer recreated, safe to drop later)
+**Temporal dimensions:** Each node has three timestamps:
+- `created_at` - When the node entered the graph (transaction time)
+- `updated_at` - When the node was last modified
+- `event_date` - When the thing actually happened (valid time)
 
 **FTS:**
-- `nodes_fts` - Full-text search on title + content
+- `nodes_fts` - Full-text search on title + source + description
 
 ### edges
 Directed relationships between nodes (knowledge graph).
@@ -117,7 +135,6 @@ Directed relationships between nodes (knowledge graph).
 - `created_at` (TEXT)
 - `context` (TEXT) — JSON blob (canonical; see `EdgeContext` below)
 - `explanation` (TEXT) — legacy column (currently not the canonical source of truth)
-- `user_feedback` (INTEGER) — user rating (not currently used in core flows)
 
 **Indexes:**
 - `idx_edges_from` — fast “outgoing edges” queries
@@ -200,7 +217,8 @@ Master list of categorization tags.
 
 **Columns:**
 - `name` (TEXT PK) - Dimension name
-- `is_priority` (INTEGER) - Priority dimension flag
+- `is_priority` (INTEGER) - Legacy compatibility field retained in schema
+- `icon` (TEXT) - Icon identifier (persisted in database)
 - `updated_at` (TEXT)
 
 ### node_dimensions
@@ -218,12 +236,14 @@ Many-to-many junction table (nodes ↔ dimensions).
 ### chats
 Conversation history with token/cost tracking.
 
+The chat schema still carries some legacy multi-agent fields. Current product framing is simpler: one RA-H assistant, with these columns mainly retained for older records, analytics, and backwards compatibility.
+
 **Columns:**
 - `id` (INTEGER PK)
 - `chat_type` (TEXT) - Conversation type
-- `helper_name` (TEXT) - Agent key (ra-h, ra-h-easy, mini-rah, wise-rah)
-- `agent_type` (TEXT) - Role category (orchestrator, executor, planner)
-- `delegation_id` (INTEGER FK)
+- `helper_name` (TEXT) - Legacy runtime label; current app sessions use `ra-h`
+- `agent_type` (TEXT) - Legacy role field retained for historical rows/analytics
+- `delegation_id` (INTEGER FK) - Legacy link to delegation records
 - `user_message` (TEXT)
 - `assistant_message` (TEXT)
 - `thread_id` (TEXT) - Conversation thread
@@ -235,7 +255,7 @@ Conversation history with token/cost tracking.
 - `idx_chats_thread` - Fast thread retrieval
 
 ### agent_delegations
-Task queue for mini-rah workers.
+Legacy delegation queue from the older multi-agent runtime. Retained so old rows and analytics remain readable; not an active user-facing feature in the current product.
 
 **Columns:**
 - `id` (INTEGER PK)
@@ -247,18 +267,6 @@ Task queue for mini-rah workers.
 - `status` (TEXT) - queued, in_progress, completed, failed
 - `summary` (TEXT) - Result summary
 - `created_at`, `updated_at` (TEXT)
-
-### chat_memory_state
-Checkpoint tracker for memory pipeline.
-
-**Columns:**
-- `thread_id` (TEXT PK)
-- `helper_name` (TEXT) - Agent that owns the thread
-- `last_processed_chat_id` (INTEGER) - Last chat processed
-- `last_processed_at` (TEXT)
-
-**Indexes:**
-- `idx_chat_memory_thread` - Fast state lookup
 
 ### logs
 Activity audit trail (auto-pruned to last 10k).
@@ -316,8 +324,8 @@ Nodes with dimensions aggregated as JSON array.
 
 ```sql
 SELECT 
-  n.id, n.title, n.content, n.link, n.metadata, n.chunk,
-  n.created_at, n.updated_at,
+  n.id, n.title, n.description, n.source, n.link, n.metadata,
+  n.event_date, n.created_at, n.updated_at,
   COALESCE(JSON_GROUP_ARRAY(d.dimension), '[]') AS dimensions_json
 FROM nodes n
 LEFT JOIN node_dimensions d ON d.node_id = n.id

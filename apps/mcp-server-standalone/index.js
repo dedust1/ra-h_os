@@ -77,7 +77,8 @@ All data stays on this device.`;
 // Tool schemas
 const addNodeInputSchema = {
   title: z.string().min(1).max(160).describe('Clear, descriptive title'),
-  content: z.string().max(20000).optional().describe('Node content/notes'),
+  content: z.string().max(20000).optional().describe('Legacy content field; mapped to source'),
+  source: z.string().max(50000).optional().describe('Full source text'),
   link: z.string().url().optional().describe('Source URL'),
   description: z.string().min(24).max(280).describe('REQUIRED. One-sentence summary: WHAT this is (explicit, concrete) + WHY it matters. No weak verbs (discusses, explores, examines). Example: "Podcast — Lex Fridman interviews Sam Altman on AGI timelines. First public comments since board drama."'),
   dimensions: z.array(z.string()).min(1).max(5).describe('1-5 categories. Call queryDimensions first to use existing ones.'),
@@ -354,7 +355,7 @@ async function main() {
       // Note: MCP schema uses "content" for external API compat; mapped to "notes" internally
       inputSchema: addNodeInputSchema
     },
-    async ({ title, content, link, description, dimensions, metadata, chunk }) => {
+    async ({ title, content, source, link, description, dimensions, metadata, chunk }) => {
       const normalizedDimensions = sanitizeDimensions(dimensions);
       if (normalizedDimensions.length === 0) {
         throw new Error('At least one dimension is required.');
@@ -366,12 +367,11 @@ async function main() {
 
       const node = nodeService.createNode({
         title: title.trim(),
-        notes: content?.trim(),
+        source: source?.trim() || chunk?.trim() || content?.trim(),
         link: link?.trim(),
         description: description?.trim(),
         dimensions: normalizedDimensions,
-        metadata: metadata || {},
-        chunk: chunk?.trim()
+        metadata: metadata || {}
       });
 
       const summary = `Created node #${node.id}: ${node.title} [${node.dimensions.join(', ')}]`;
@@ -425,7 +425,7 @@ async function main() {
                 WITH fts_matches AS (
                   SELECT rowid, rank FROM nodes_fts WHERE nodes_fts MATCH ? LIMIT 100
                 )
-                SELECT n.id, n.title, n.description, n.notes, n.link,
+                SELECT n.id, n.title, n.description, n.source, n.link,
                        n.created_at, n.updated_at, n.event_date,
                        COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                                  FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
@@ -446,7 +446,7 @@ async function main() {
                 WITH fts_matches AS (
                   SELECT rowid, rank FROM nodes_fts WHERE nodes_fts MATCH ? LIMIT ?
                 )
-                SELECT n.id, n.title, n.description, n.notes, n.link,
+                SELECT n.id, n.title, n.description, n.source, n.link,
                        n.created_at, n.updated_at, n.event_date,
                        COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                                  FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
@@ -462,7 +462,7 @@ async function main() {
             nodes = rows.map(row => ({
               id: row.id,
               title: row.title,
-              notes: row.notes ?? null,
+              source: row.source ?? null,
               description: row.description ?? null,
               link: row.link ?? null,
               dimensions: JSON.parse(row.dimensions_json || '[]'),
@@ -482,7 +482,7 @@ async function main() {
         const words = trimmedQuery.split(/\s+/).filter(w => w.length > 0);
 
         let sql = `
-          SELECT n.id, n.title, n.description, n.notes, n.link,
+          SELECT n.id, n.title, n.description, n.source, n.link,
                  n.created_at, n.updated_at, n.event_date,
                  COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                            FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
@@ -492,7 +492,7 @@ async function main() {
         const params = [];
 
         for (const word of words) {
-          sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.notes LIKE ? COLLATE NOCASE)`;
+          sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.source LIKE ? COLLATE NOCASE)`;
           params.push(`%${word}%`, `%${word}%`, `%${word}%`);
         }
 
@@ -518,7 +518,7 @@ async function main() {
         nodes = rows.map(row => ({
           id: row.id,
           title: row.title,
-          notes: row.notes ?? null,
+          source: row.source ?? null,
           description: row.description ?? null,
           link: row.link ?? null,
           dimensions: JSON.parse(row.dimensions_json || '[]'),
@@ -560,13 +560,13 @@ async function main() {
       for (const id of uniqueIds) {
         const node = nodeService.getNodeById(id);
         if (node) {
-          const rawChunk = node.chunk ?? null;
+          const rawChunk = node.source ?? node.chunk ?? null;
           const chunkTruncated = rawChunk ? rawChunk.length > CHUNK_LIMIT : false;
 
           nodes.push({
             id: node.id,
             title: node.title,
-            notes: node.notes ?? null,
+            source: node.source ?? node.notes ?? null,
             description: node.description ?? null,
             link: node.link ?? null,
             chunk: chunkTruncated ? rawChunk.substring(0, CHUNK_LIMIT) : rawChunk,
@@ -610,14 +610,18 @@ async function main() {
         throw new Error(descriptionError);
       }
 
-      // Map MCP 'content' field → internal 'notes' field
+      // Map MCP legacy fields to canonical source
       const mappedUpdates = { ...updates };
       if (mappedUpdates.content !== undefined) {
-        mappedUpdates.notes = mappedUpdates.content;
-        delete mappedUpdates.content;
+        mappedUpdates.source = mappedUpdates.content;
       }
+      if (mappedUpdates.chunk !== undefined && mappedUpdates.source === undefined) {
+        mappedUpdates.source = mappedUpdates.chunk;
+      }
+      delete mappedUpdates.content;
+      delete mappedUpdates.chunk;
 
-      const node = nodeService.updateNode(id, mappedUpdates, { appendNotes: true });
+      const node = nodeService.updateNode(id, mappedUpdates, { appendNotes: false });
 
       return {
         content: [{ type: 'text', text: `Updated node #${id}` }],
