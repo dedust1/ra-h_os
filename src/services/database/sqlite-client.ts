@@ -616,13 +616,60 @@ class SQLiteClient {
 
       // 10) Final schema pass migrations (content→notes, event_date, dimensions.icon, drop dead columns)
       try {
-        const nodeCols2 = this.db.prepare('PRAGMA table_info(nodes)').all() as Array<{ name: string }>;
-        const nodeColNames = nodeCols2.map(c => c.name);
+        let nodeCols2 = this.db.prepare('PRAGMA table_info(nodes)').all() as Array<{ name: string }>;
+        let nodeColNames = nodeCols2.map(c => c.name);
 
         // Rename content → notes (additive first)
         if (nodeColNames.includes('content') && !nodeColNames.includes('notes')) {
           console.log('Migrating nodes.content → nodes.notes...');
           this.db.exec('ALTER TABLE nodes RENAME COLUMN content TO notes;');
+          nodeCols2 = this.db.prepare('PRAGMA table_info(nodes)').all() as Array<{ name: string }>;
+          nodeColNames = nodeCols2.map(c => c.name);
+        }
+
+        if (!nodeColNames.includes('source')) {
+          console.log('Adding nodes.source column...');
+          this.db.exec('ALTER TABLE nodes ADD COLUMN source TEXT;');
+          nodeCols2 = this.db.prepare('PRAGMA table_info(nodes)').all() as Array<{ name: string }>;
+          nodeColNames = nodeCols2.map(c => c.name);
+        }
+
+        if (nodeColNames.includes('source')) {
+          this.db.exec(`
+            UPDATE nodes
+            SET source = chunk
+            WHERE (source IS NULL OR LENGTH(TRIM(source)) = 0)
+              AND chunk IS NOT NULL
+              AND LENGTH(TRIM(chunk)) > 0;
+          `);
+
+          this.db.exec(`
+            UPDATE nodes
+            SET source = notes,
+                chunk_status = 'not_chunked'
+            WHERE (source IS NULL OR LENGTH(TRIM(source)) = 0)
+              AND notes IS NOT NULL
+              AND LENGTH(TRIM(notes)) > 0;
+          `);
+
+          this.db.exec(`
+            UPDATE nodes
+            SET source = title || CASE
+              WHEN description IS NOT NULL AND LENGTH(TRIM(description)) > 0
+                THEN char(10) || char(10) || description
+              ELSE ''
+            END,
+            chunk_status = 'not_chunked'
+            WHERE source IS NULL OR LENGTH(TRIM(source)) = 0;
+          `);
+
+          this.db.exec(`
+            UPDATE nodes
+            SET chunk_status = 'not_chunked'
+            WHERE source IS NOT NULL
+              AND LENGTH(TRIM(source)) > 0
+              AND (chunk_status IS NULL OR chunk_status != 'chunked');
+          `);
         }
 
         // Add event_date
@@ -657,8 +704,10 @@ class SQLiteClient {
         if (edgeCols.some(c => c.name === 'user_feedback')) {
           try { this.db.exec('ALTER TABLE edges DROP COLUMN user_feedback;'); } catch {}
         }
+        // edges.explanation (top-level column added alongside context JSON)
         if (!edgeCols.some(c => c.name === 'explanation')) {
           this.db.exec('ALTER TABLE edges ADD COLUMN explanation TEXT;');
+          // Backfill from context JSON where available
           try {
             this.db.exec(`
               UPDATE edges SET explanation = json_extract(context, '$.explanation')
@@ -667,13 +716,13 @@ class SQLiteClient {
           } catch {}
         }
 
-        // Recreate nodes_fts to index title + description + notes
+        // Recreate nodes_fts to index title + source + description
         try {
           const ftsCheck = this.db.prepare("SELECT sql FROM sqlite_master WHERE name='nodes_fts'").get() as { sql?: string } | undefined;
-          if (ftsCheck?.sql && (!ftsCheck.sql.includes('description') || ftsCheck.sql.includes('content'))) {
+          const needsRebuild = !ftsCheck?.sql || !ftsCheck.sql.includes('source') || ftsCheck.sql.includes('notes') || ftsCheck.sql.includes('content');
+          if (needsRebuild) {
             this.db.exec('DROP TABLE IF EXISTS nodes_fts;');
-            this.db.exec("CREATE VIRTUAL TABLE nodes_fts USING fts5(title, description, notes, content='nodes', content_rowid='id');");
-            // Rebuild FTS index
+            this.db.exec("CREATE VIRTUAL TABLE nodes_fts USING fts5(title, source, description, content='nodes', content_rowid='id');");
             this.db.exec("INSERT INTO nodes_fts(nodes_fts) VALUES('rebuild');");
           }
         } catch (ftsErr) {

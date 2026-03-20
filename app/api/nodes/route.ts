@@ -92,15 +92,15 @@ export async function POST(request: NextRequest) {
     // Sanitize title (strip extraction artifacts)
     body.title = sanitizeTitle(body.title);
 
-    const rawNotes = typeof body.notes === 'string' ? body.notes : null;
-    const rawChunk = typeof body.chunk === 'string' ? body.chunk : null;
+    const rawSource = typeof body.source === 'string' ? body.source.trim() : null;
     const eventDate = typeof body.event_date === 'string' ? body.event_date : null;
 
     // Process provided dimensions first (needed for description generation)
     const trimmedProvidedDimensions = normalizeDimensions(body.dimensions, 5);
 
     // Use provided description if present, otherwise auto-generate
-    let nodeDescription: string | undefined = typeof body.description === 'string' && body.description.trim()
+    const isUserSuppliedDescription = typeof body.description === 'string' && body.description.trim().length > 0;
+    let nodeDescription: string | undefined = isUserSuppliedDescription
       ? body.description.trim().slice(0, 280)
       : undefined;
 
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       try {
         nodeDescription = await generateDescription({
           title: body.title,
-          notes: rawNotes || rawChunk?.slice(0, 2000) || undefined,
+          notes: rawSource?.slice(0, 2000) || undefined,
           link: body.link || undefined,
           metadata: body.metadata,
           dimensions: trimmedProvidedDimensions
@@ -127,7 +127,6 @@ export async function POST(request: NextRequest) {
 
     const descriptionError = validateExplicitDescription(finalDescription);
     if (descriptionError) {
-      const isUserSuppliedDescription = typeof body.description === 'string' && body.description.trim().length > 0;
       if (isUserSuppliedDescription) {
         return NextResponse.json({
           success: false,
@@ -148,33 +147,20 @@ export async function POST(request: NextRequest) {
 
     // Use only provided dimensions (no auto-assignment)
     const finalDimensions = trimmedProvidedDimensions;
-    let chunkToStore = rawChunk;
+    const sourceToStore = rawSource || [body.title, nodeDescription].filter(Boolean).join('\n\n').trim() || null;
     let chunkStatus: Node['chunk_status'];
 
-    if (chunkToStore && chunkToStore.trim().length > 0) {
+    if (sourceToStore && sourceToStore.trim().length > 0) {
       chunkStatus = 'not_chunked';
-    } else {
-      // Build chunk from all available notes if not provided
-      // This ensures every node gets at least one chunk for search
-      const fallbackContent = [body.title, nodeDescription, rawNotes]
-        .filter(Boolean)
-        .join('\n\n')
-        .trim();
-
-      if (fallbackContent) {
-        chunkToStore = fallbackContent;
-        chunkStatus = 'not_chunked';
-      }
     }
 
     const node = await nodeService.createNode({
       title: body.title,
       description: finalDescription,
-      notes: rawNotes ?? undefined,
+      source: sourceToStore ?? undefined,
       event_date: eventDate ?? undefined,
       link: body.link,
       dimensions: finalDimensions,
-      chunk: chunkToStore ?? undefined,
       chunk_status: chunkStatus,
       metadata: body.metadata || {}
     });

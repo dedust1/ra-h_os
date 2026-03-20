@@ -85,13 +85,15 @@ export async function PUT(
       updates.dimensions = normalizeDimensions(body.dimensions, 5);
     }
 
-    const incomingChunk = typeof body.chunk === 'string' ? body.chunk : undefined;
-    const incomingNotes = typeof body.notes === 'string' ? body.notes : undefined;
-    const existingChunk = existingNode.chunk ?? '';
+    delete updates.notes;
+    delete updates.chunk;
 
-    if (incomingChunk !== undefined) {
-      const trimmedIncoming = incomingChunk.trim();
-      const trimmedExisting = existingChunk.trim();
+    const incomingSource = typeof body.source === 'string' ? body.source : undefined;
+    const existingSource = existingNode.source ?? '';
+
+    if (incomingSource !== undefined) {
+      const trimmedIncoming = incomingSource.trim();
+      const trimmedExisting = existingSource.trim();
 
       if (!trimmedIncoming) {
         updates.chunk_status = null;
@@ -101,10 +103,6 @@ export async function PUT(
       } else {
         delete updates.chunk_status;
       }
-    } else if (!existingChunk.trim() && hasSufficientContent(incomingNotes)) {
-      updates.chunk = incomingNotes;
-      updates.chunk_status = 'not_chunked';
-      shouldQueueEmbed = true;
     }
 
     const node = await nodeService.updateNode(nodeId, updates);

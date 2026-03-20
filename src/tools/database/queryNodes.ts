@@ -44,7 +44,7 @@ function scoreNodeForSearch(node: Node, searchTerm: string): number {
   const normalizedSearch = searchTerm.toLowerCase();
   const title = (node.title || '').toLowerCase();
   const description = (node.description || '').toLowerCase();
-  const notes = (node.notes || '').toLowerCase();
+  const source = (node.source || '').toLowerCase();
   const terms = extractSearchTerms(searchTerm);
 
   let score = 0;
@@ -52,23 +52,23 @@ function scoreNodeForSearch(node: Node, searchTerm: string): number {
   if (title === normalizedSearch) score += 100;
   if (title.includes(normalizedSearch)) score += 40;
   if (description.includes(normalizedSearch)) score += 20;
-  if (notes.includes(normalizedSearch)) score += 10;
+  if (source.includes(normalizedSearch)) score += 10;
 
   for (const term of terms) {
     if (title.includes(term)) score += 8;
     if (description.includes(term)) score += 3;
-    if (notes.includes(term)) score += 2;
+    if (source.includes(term)) score += 2;
   }
 
   return score;
 }
 
 export const queryNodesTool = tool({
-  description: 'Search nodes across title, description, and notes. For free-text lookups, search the graph broadly and prioritize title/description matches. Do not use dimensions to constrain keyword search unless the user is explicitly asking about a known dimension.',
+  description: 'Search nodes across title, description, and source. For free-text lookups, search the graph broadly and prioritize title/description matches. Do not use dimensions to constrain keyword search unless the user is explicitly asking about a known dimension.',
   inputSchema: z.object({
     filters: z.object({
       dimensions: z.array(z.string()).describe('Filter by dimensions (e.g., ["research", "ai", "technology"]). Replaces old type/stage filtering.').optional(),
-      search: z.string().describe('Search term to match against node title, description, or notes').optional(),
+      search: z.string().describe('Search term to match against node title, description, or source').optional(),
       limit: z.number().min(1).max(50).default(10).describe('Maximum number of results to return'),
       createdAfter: z.string().optional().describe('ISO date (YYYY-MM-DD). Only return nodes created on or after this date.'),
       createdBefore: z.string().optional().describe('ISO date (YYYY-MM-DD). Only return nodes created before this date.'),

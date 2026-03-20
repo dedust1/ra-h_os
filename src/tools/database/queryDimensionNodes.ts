@@ -48,11 +48,12 @@ export const queryDimensionNodesTool = tool({
           event_date: node.event_date ?? null,
         };
 
-        if (includeContent && node.notes) {
+        if (includeContent && (node.source || node.notes)) {
+          const previewSource = node.source || node.notes || '';
           // Truncate to ~100 chars
-          formatted.notesPreview = node.notes.length > 100
-            ? node.notes.substring(0, 100) + '...'
-            : node.notes;
+          formatted.sourcePreview = previewSource.length > 100
+            ? previewSource.substring(0, 100) + '...'
+            : previewSource;
         }
 
         return formatted;

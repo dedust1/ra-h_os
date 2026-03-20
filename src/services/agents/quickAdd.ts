@@ -236,7 +236,7 @@ async function handleExtractionQuickAdd(type: ExtractionQuickAddType, url: strin
     const title = deriveFallbackLinkTitle(url);
     const description =
       `Link record for this source. RA-H could not correctly process the URL during ingestion because ${message}. Stored so the source is not lost and can be revisited later.`;
-    const notes = [
+    const source = [
       `Original URL: ${url}`,
       `Ingestion failure: ${message}`,
       `Attempted pipeline: ${type}`,
@@ -248,7 +248,7 @@ async function handleExtractionQuickAdd(type: ExtractionQuickAddType, url: strin
       body: JSON.stringify({
         title,
         description,
-        notes,
+        source,
         link: url,
         metadata: {
           source: 'quick-add-link-fallback',
@@ -292,7 +292,7 @@ async function handleNoteQuickAdd(rawInput: string, task: string, userDescriptio
   const title = deriveNoteTitle(content);
   const nodePayload: Record<string, unknown> = {
     title,
-    notes: content,
+    source: content,
     metadata: {
       source: 'quick-add-note',
       refined_at: new Date().toISOString(),
@@ -396,8 +396,8 @@ async function handleChatTranscriptQuickAdd(rawInput: string, task: string): Pro
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title,
-      notes: content,
-      chunk: transcript,
+      source: transcript,
+      description: content,
       metadata,
     }),
   });

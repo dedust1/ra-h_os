@@ -9,14 +9,13 @@ export const updateNodeTool = tool({
     id: z.number().describe('The ID of the node to update'),
     updates: z.object({
       title: z.string().optional().describe('New title'),
-      notes: z.string().optional().describe('User notes/analysis to append. USE THIS for workflow outputs, briefs, research notes, etc.'),
       description: z.string().max(280).describe('REQUIRED on every update. Explicitly state WHAT this is + WHY it matters. No "discusses/explores".'),
+      source: z.string().optional().describe('Canonical source content for embedding. Use this only to set or correct the raw source text.'),
       link: z.string().optional().describe('New link'),
       event_date: z.string().optional().describe('When the thing actually happened (ISO 8601). Not when it was added to the graph.'),
       dimensions: z.array(z.string()).optional().describe('New dimension tags - completely replaces existing dimensions'),
-      chunk: z.string().optional().describe('DO NOT USE - raw source text that triggers re-embedding. Only for source corrections.'),
       metadata: z.record(z.any()).optional().describe('New metadata - completely replaces existing metadata')
-    }).describe('Object containing the fields to update. For adding notes/analysis, always use "notes" field.')
+    }).describe('Object containing the fields to update. Derived analysis should be stored in a separate linked node, not appended to the source node.')
   }),
   execute: async ({ id, updates }) => {
     try {
@@ -42,56 +41,6 @@ export const updateNodeTool = tool({
           error: descriptionError,
           data: null
         };
-      }
-
-      // FORCE APPEND for notes field - fetch existing and append new notes
-      if (updates.notes) {
-        const fetchResponse = await fetch(`${getInternalApiBaseUrl()}/api/nodes/${id}`);
-        if (fetchResponse.ok) {
-          const { node } = await fetchResponse.json();
-          const existingNotes = (node?.notes || '').trim();
-          const newNotes = updates.notes.trim();
-
-          // Skip if new notes are identical to existing (model sent duplicate)
-          if (existingNotes === newNotes) {
-            console.log(`[updateNode] ERROR - new notes identical to existing (${existingNotes.length} chars). Model should NOT call updateNode again.`);
-            return {
-              success: false,
-              error: 'Notes already up to date - do not call updateNode again. Move to next step.',
-              data: null
-            };
-          }
-
-          // Detect if adding a section that already exists (e.g., ## Integration Analysis)
-          const newSectionMatch = newNotes.match(/^##\s+(.+)$/m);
-          if (newSectionMatch && existingNotes) {
-            const sectionHeader = newSectionMatch[0]; // e.g., "## Integration Analysis"
-            if (existingNotes.includes(sectionHeader)) {
-              console.log(`[updateNode] ERROR - Section "${sectionHeader}" already exists in node`);
-              return {
-                success: false,
-                error: `Section "${sectionHeader}" already exists in this node. Cannot append duplicate section.`,
-                data: null
-              };
-            }
-          }
-
-          // Detect if model included existing notes + new notes
-          if (existingNotes && newNotes.startsWith(existingNotes)) {
-            // Extract only the new part
-            const actualNewNotes = newNotes.substring(existingNotes.length).trim();
-            console.log(`[updateNode] Model included existing notes - extracting new part only (${actualNewNotes.length} chars)`);
-            const separator = existingNotes.endsWith('\n\n') ? '' : '\n\n';
-            updates.notes = `${existingNotes}${separator}${actualNewNotes}`;
-          } else if (existingNotes) {
-            // Normal append
-            const separator = existingNotes.endsWith('\n\n') ? '' : '\n\n';
-            updates.notes = `${existingNotes}${separator}${newNotes}`;
-            console.log(`[updateNode] Appended notes: ${existingNotes.length} + ${newNotes.length} = ${updates.notes.length} chars`);
-          } else {
-            console.log(`[updateNode] No existing notes, using new notes as-is (${newNotes.length} chars)`);
-          }
-        }
       }
 
       if (Array.isArray(updates.dimensions)) {

@@ -86,6 +86,7 @@ const sanitizeDimensions = (raw) => {
 const addNodeInputSchema = {
   title: z.string().min(1).max(160),
   content: z.string().max(20000).optional(),
+  source: z.string().max(50000).optional(),
   link: z.string().url().optional(),
   description: z.string().max(2000).optional(),
   dimensions: z.array(z.string()).min(1).max(5),
@@ -112,7 +113,7 @@ const searchNodesOutputSchema = {
     z.object({
       id: z.number(),
       title: z.string(),
-      notes: z.string().nullable(),
+      source: z.string().nullable(),
       description: z.string().nullable(),
       link: z.string().nullable(),
       dimensions: z.array(z.string()),
@@ -151,7 +152,7 @@ const getNodesOutputSchema = {
     z.object({
       id: z.number(),
       title: z.string(),
-      notes: z.string().nullable(),
+      source: z.string().nullable(),
       link: z.string().nullable(),
       dimensions: z.array(z.string()),
       updated_at: z.string()
@@ -349,7 +350,7 @@ mcpServer.registerTool(
     inputSchema: addNodeInputSchema,
     outputSchema: addNodeOutputSchema
   },
-  async ({ title, content, link, description, dimensions, metadata, chunk }) => {
+  async ({ title, content, source, link, description, dimensions, metadata, chunk }) => {
     const normalizedDimensions = sanitizeDimensions(dimensions);
     if (normalizedDimensions.length === 0) {
       throw new McpError(
@@ -360,12 +361,11 @@ mcpServer.registerTool(
 
     const payload = {
       title: title.trim(),
-      notes: content?.trim() || undefined,
+      source: source?.trim() || chunk?.trim() || content?.trim() || undefined,
       link: link?.trim() || undefined,
       description: description?.trim() || undefined,
       dimensions: normalizedDimensions,
-      metadata: metadata || {},
-      chunk: chunk?.trim() || undefined
+      metadata: metadata || {}
     };
 
     const result = await callRaHApi('/api/nodes', {
@@ -422,7 +422,7 @@ mcpServer.registerTool(
         nodes: nodes.map((node) => ({
           id: node.id,
           title: node.title,
-          notes: node.notes ?? null,
+          source: node.source ?? node.notes ?? null,
           description: node.description ?? null,
           link: node.link ?? null,
           dimensions: node.dimensions || [],
@@ -446,12 +446,16 @@ mcpServer.registerTool(
       throw new McpError(ErrorCode.InvalidParams, 'At least one field must be provided in updates.');
     }
 
-    // Map MCP 'content' field → internal 'notes' field
+    // Map MCP legacy fields to canonical source
     const mappedUpdates = { ...updates };
     if (mappedUpdates.content !== undefined) {
-      mappedUpdates.notes = mappedUpdates.content;
-      delete mappedUpdates.content;
+      mappedUpdates.source = mappedUpdates.content;
     }
+    if (mappedUpdates.chunk !== undefined && mappedUpdates.source === undefined) {
+      mappedUpdates.source = mappedUpdates.chunk;
+    }
+    delete mappedUpdates.content;
+    delete mappedUpdates.chunk;
 
     const result = await callRaHApi(`/api/nodes/${id}`, {
       method: 'PUT',
@@ -492,7 +496,7 @@ mcpServer.registerTool(
           nodes.push({
             id: result.node.id,
             title: result.node.title,
-            notes: result.node.notes ?? null,
+            source: result.node.source ?? result.node.notes ?? null,
             link: result.node.link ?? null,
             dimensions: result.node.dimensions || [],
             updated_at: result.node.updated_at

@@ -1,6 +1,6 @@
 /**
  * Universal chunking and embedding service for RA-H knowledge management system
- * Takes a node_id, reads chunk content from nodes table, chunks it, and stores in chunks table
+ * Takes a node_id, reads source content from nodes table, chunks it, and stores in chunks table
  */
 
 import OpenAI from 'openai';
@@ -14,7 +14,7 @@ import {
 interface Node {
   id: number;
   title: string;
-  chunk: string | null;
+  source: string | null;
   chunk_status?: string | null;
 }
 
@@ -157,7 +157,7 @@ export class UniversalEmbedder {
     
     // Get node data
     const stmt = this.db.prepare(`
-      SELECT id, title, chunk, chunk_status
+      SELECT id, title, source, chunk_status
       FROM nodes
       WHERE id = ?
     `);
@@ -168,8 +168,8 @@ export class UniversalEmbedder {
       throw new Error(`Node ${nodeId} not found`);
     }
     
-    if (!node.chunk || node.chunk.trim().length === 0) {
-      console.log(`Node ${nodeId} has no chunk content to process`);
+    if (!node.source || node.source.trim().length === 0) {
+      console.log(`Node ${nodeId} has no source content to process`);
       return { chunks: 0 };
     }
     
@@ -179,7 +179,7 @@ export class UniversalEmbedder {
     this.deleteExistingChunks(nodeId);
     
     // Split text into chunks
-    const chunks = await this.textSplitter.splitText(node.chunk);
+    const chunks = await this.textSplitter.splitText(node.source);
     
     if (verbose) {
       console.log(`Split into ${chunks.length} chunks`);

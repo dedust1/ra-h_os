@@ -8,8 +8,8 @@ export const createNodeTool = tool({
   description: 'Create node. Description is REQUIRED and must be explicit about what the thing is (podcast, chat summary, idea, etc).',
   inputSchema: z.object({
     title: z.string().describe('The title of the node'),
-    notes: z.string().optional().describe('User notes, analysis, or thoughts about this node'),
     description: z.string().max(280).describe('REQUIRED. Explicitly state WHAT this is (e.g. podcast episode, conversation summary, user insight) + WHY it matters for context grounding.'),
+    source: z.string().optional().describe('Raw content for embedding: transcript, article text, book passages, or user thoughts. If omitted, falls back to title + description.'),
     link: z.string().optional().describe('A URL link to the source'),
     event_date: z.string().optional().describe('When the thing actually happened (ISO 8601). Not when it was added to the graph.'),
     dimensions: z
@@ -17,7 +17,6 @@ export const createNodeTool = tool({
       .max(5)
       .optional()
       .describe('Optional dimension tags to apply to this node (0-5 items).'),
-    chunk: z.string().optional().describe('Raw content for later processing - CRITICAL for extracted content from URLs'),
     metadata: z.record(z.any()).optional().describe('Additional metadata like source info, extraction details, etc.')
   }),
   execute: async (params) => {

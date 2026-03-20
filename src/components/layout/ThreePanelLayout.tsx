@@ -172,12 +172,12 @@ export default function ThreePanelLayout() {
         id: node.id,
         title: node.title,
         link: node.link,
+        source: node.source,
         notes: node.notes,
         dimensions: node.dimensions,
         created_at: node.created_at,
         updated_at: node.updated_at,
         chunk_status: node.chunk_status,
-        chunk: node.chunk,
         metadata: node.metadata,
       }));
       setOpenTabsData(validNodes);

@@ -193,15 +193,14 @@ export const youtubeExtractTool = tool({
         };
       }
 
-      let result: { success: boolean; notes?: string; chunk?: string; metadata?: any; error?: string };
+      let result: { success: boolean; source?: string; metadata?: any; error?: string };
       
       console.log('📝 Using TypeScript yt-dlp extractor');
       try {
         const extractionResult = await extractYouTube(url);
         result = {
           success: extractionResult.success,
-          notes: extractionResult.content,
-          chunk: extractionResult.chunk,
+          source: extractionResult.chunk || extractionResult.content,
           metadata: {
             video_title: extractionResult.metadata.video_title,
             channel_name: extractionResult.metadata.channel_name,
@@ -222,7 +221,7 @@ export const youtubeExtractTool = tool({
         };
       }
 
-      if (!result.success || (!result.notes && !result.chunk)) {
+      if (!result.success || !result.source) {
         return {
           success: false,
           error: result.error || 'Failed to extract YouTube content',
@@ -243,8 +242,7 @@ export const youtubeExtractTool = tool({
 
       // Step 3: Create node with extracted content and AI analysis
       const nodeTitle = title || result.metadata?.video_title || `YouTube Video ${url.split('/').pop()?.split('?')[0]}`;
-      const transcriptSummary = await summariseTranscript(nodeTitle, result.chunk || result.notes || '');
-      const nodeNotes = transcriptSummary || aiAnalysis?.enhancedDescription || `YouTube video by ${result.metadata?.channel_name || 'Unknown Channel'}`;
+      const transcriptSummary = await summariseTranscript(nodeTitle, result.source);
 
       const suppliedDimensions = Array.isArray(dimensions) ? dimensions : [];
       let trimmedDimensions = suppliedDimensions
@@ -262,10 +260,9 @@ export const youtubeExtractTool = tool({
         body: JSON.stringify({
           title: nodeTitle,
           description: aiAnalysis?.nodeDescription,
-          notes: nodeNotes,
+          source: result.source,
           link: url,
           dimensions: finalDimensions,
-          chunk: result.chunk || result.notes,
           metadata: {
             source: 'youtube',
             video_id: result.metadata?.video_id,
@@ -308,7 +305,7 @@ export const youtubeExtractTool = tool({
         data: {
           nodeId: createResult.data?.id,
           title: nodeTitle,
-          contentLength: (result.chunk || result.notes || '').length,
+          contentLength: result.source.length,
           url: url,
           dimensions: actualDimensions
         }

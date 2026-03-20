@@ -478,17 +478,13 @@ export class EdgeService {
           ELSE n_from.title
         END as connected_node_title,
         CASE
-          WHEN e.from_node_id = ? THEN n_to.notes
-          ELSE n_from.notes
-        END as connected_node_notes,
-        CASE 
           WHEN e.from_node_id = ? THEN n_to.link
           ELSE n_from.link
         END as connected_node_link,
         CASE 
-          WHEN e.from_node_id = ? THEN n_to.chunk
-          ELSE n_from.chunk
-        END as connected_node_chunk,
+          WHEN e.from_node_id = ? THEN n_to.source
+          ELSE n_from.source
+        END as connected_node_source,
         CASE 
           WHEN e.from_node_id = ? THEN n_to.metadata
           ELSE n_from.metadata
@@ -547,11 +543,10 @@ export class EdgeService {
       const connected_node: Node = {
         id: row.connected_node_id,
         title: row.connected_node_title,
-        notes: row.connected_node_notes,
         link: row.connected_node_link,
         dimensions: row.connected_node_dimensions,
         embedding: undefined, // Not needed for display
-        chunk: row.connected_node_chunk,
+        source: row.connected_node_source,
         metadata: row.connected_node_metadata,
         created_at: row.connected_node_created_at,
         updated_at: row.connected_node_updated_at
@@ -592,11 +587,10 @@ export class EdgeService {
       const connected_node: Node = {
         id: row.connected_node_id,
         title: row.connected_node_title,
-        notes: row.connected_node_notes,
         link: row.connected_node_link,
         dimensions: JSON.parse(row.connected_node_dimensions_json || '[]'),
         embedding: undefined, // Not needed for display
-        chunk: row.connected_node_chunk,
+        source: row.connected_node_source,
         metadata: typeof row.connected_node_metadata === 'string' ? JSON.parse(row.connected_node_metadata) : row.connected_node_metadata,
         created_at: row.connected_node_created_at,
         updated_at: row.connected_node_updated_at

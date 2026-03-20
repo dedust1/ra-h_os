@@ -118,13 +118,12 @@ CREATE TABLE nodes (
   id INTEGER PRIMARY KEY,
   title TEXT,
   description TEXT,
-  notes TEXT,
+  source TEXT,
   link TEXT,
   event_date TEXT,
   created_at TEXT,
   updated_at TEXT,
   metadata TEXT,
-  chunk TEXT,
   embedding BLOB,
   embedding_updated_at TEXT,
   embedding_text TEXT,
@@ -281,9 +280,9 @@ if has_table nodes; then
     echo "Adding nodes.metadata"
     "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE nodes ADD COLUMN metadata TEXT;"
   fi
-  if ! has_col nodes chunk; then
-    echo "Adding nodes.chunk"
-    "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE nodes ADD COLUMN chunk TEXT;"
+  if ! has_col nodes source; then
+    echo "Adding nodes.source"
+    "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE nodes ADD COLUMN source TEXT;"
   fi
   # is_pinned removed in final schema pass
 fi

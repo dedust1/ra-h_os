@@ -16,12 +16,15 @@ export class AutoEmbedQueue {
   private readonly lastRunAt = new Map<number, number>();
   private readonly maxConcurrent = 1;
   private readonly cooldownMs = DEFAULT_COOLDOWN_MS;
-  private readonly embeddingsDisabled = process.env.DISABLE_EMBEDDINGS === 'true';
+
+  async recoverStuckNodes(): Promise<void> {
+    const stuckNodes = await nodeService.getNodes({ chunkStatus: 'not_chunked', limit: 1000 });
+    for (const node of stuckNodes) {
+      this.enqueue(node.id, { reason: 'startup_recovery' });
+    }
+  }
 
   enqueue(nodeId: number, task: Omit<AutoEmbedTask, 'nodeId'> = {}): boolean {
-    if (this.embeddingsDisabled && !task.force) {
-      return false;
-    }
     const existing = this.pendingTasks.get(nodeId);
     if (!existing) {
       this.pendingTasks.set(nodeId, { nodeId, ...task });
@@ -77,18 +80,9 @@ export class AutoEmbedQueue {
   }
 
   private async executeTask(task: AutoEmbedTask) {
-    if (this.embeddingsDisabled && !task.force) {
-      return;
-    }
     const node = await nodeService.getNodeById(task.nodeId);
     if (!node) {
       console.warn('[AutoEmbedQueue] Node missing, skipping', task.nodeId);
-      return;
-    }
-
-    const chunkText = node.chunk?.trim();
-    if (!chunkText) {
-      console.warn('[AutoEmbedQueue] Node has no chunk content, skipping', task.nodeId);
       return;
     }
 
@@ -117,4 +111,7 @@ declare global {
 export const autoEmbedQueue = globalThis.autoEmbedQueue ?? new AutoEmbedQueue();
 if (!globalThis.autoEmbedQueue) {
   globalThis.autoEmbedQueue = autoEmbedQueue;
+  autoEmbedQueue.recoverStuckNodes().catch(error => {
+    console.error('[AutoEmbedQueue] Startup recovery failed', error);
+  });
 }

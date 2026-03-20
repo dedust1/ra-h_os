@@ -1,9 +1,6 @@
 ---
 name: DB Operations
-description: "Use this for all graph read/write operations with strict data quality standards."
-when_to_use: "Any request to read, create, update, connect, classify, or traverse graph data."
-when_not_to_use: "Pure conversation with no graph interaction needed."
-success_criteria: "Writes are explicit and correct; descriptions are concrete; edges and dimensions are high-signal."
+description: "Use for graph read, write, connect, classify, or traverse operations with strict data quality standards."
 ---
 
 # DB Operations
@@ -20,8 +17,9 @@ success_criteria: "Writes are explicit and correct; descriptions are concrete; e
 
 - `title`: clear and specific.
 - `description`: concrete object-level description, not vague summaries.
-- `notes/content`: extra context, analysis, supporting detail.
+- `source`: full verbatim or canonical content of the node (transcript, article text, book passage, user's thoughts). This is what gets chunked and embedded for semantic search.
 - `link`: external source URL only.
+- Derived analysis, briefs, and research notes should be stored in a separate linked node, not appended to the source node.
 
 ## Execution Pattern
 
